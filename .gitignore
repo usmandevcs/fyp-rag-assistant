@@ -27,3 +27,8 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# Database and Temp files
+chroma_db/
+temp_uploads/
+rag_app.db
