@@ -1,0 +1,56 @@
+# Virtual environments
+env/
+venv/
+ENV/
+.venv
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Auto-generated database folder
+chroma_db/
+
+# Temporary file uploads folder
+temp_uploads/
+tem_uploads/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+Thumbs.db
+.DS_Store
