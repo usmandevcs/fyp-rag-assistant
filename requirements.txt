@@ -9,3 +9,5 @@ pypdf
 python-dotenv
 sqlalchemy
 alembic
+groq
+yt-dlp

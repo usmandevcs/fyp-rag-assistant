@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/providers/chat_provider.dart';
 import 'package:frontend/widgets/history_sidebar.dart';
 import 'package:frontend/widgets/chat_bubble.dart';
+import 'package:frontend/utils/summary_download.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -43,6 +44,40 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _uploadFile(ChatProvider chatProvider) async {
     await chatProvider.pickAndUploadFile();
     _scrollToBottom();
+  }
+
+  Future<void> _requestSummary(ChatProvider chatProvider) async {
+    final summaryPrompt =
+        'Act as an expert data analyst. Please read the provided document context and generate a comprehensive, well-structured summary. Highlight the main topics, key arguments, and critical conclusions. Use Markdown formatting (bullet points, bold text) for clarity.';
+    await chatProvider.sendMessage(summaryPrompt, isSummaryRequest: true);
+    _scrollToBottom();
+  }
+
+  Future<void> _downloadSummary(ChatProvider chatProvider) async {
+    final summary = chatProvider.generatedSummaryText;
+    if (summary == null || summary.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await downloadSummaryMarkdown(
+        markdown: summary,
+        fileName: 'vesper_summary.md',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Failed to download summary: $error'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
   }
 
   void _scrollToBottom() {
@@ -105,47 +140,125 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 const Icon(
                   Icons.memory_outlined,
-                  color: Colors.cyanAccent,
+                  color: Color(0xFFA78BFA),
                   size: 20,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'JARVIS CHAT',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.cyanAccent,
-                    letterSpacing: 1.1,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Text(
+                    chatProvider.filename ?? 'VESPER CHAT',
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: const Color(0xFFA78BFA),
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
             ),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(1),
-              child: Container(
+                child: Container(
                 height: 1,
-                color: Colors.cyanAccent.withValues(alpha: 0.24),
+                color: const Color(0xFFA78BFA).withValues(alpha: 0.24),
               ),
             ),
             actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.cyanAccent.withValues(alpha: 0.42),
-                    ),
-                    color: const Color(0x33111A21),
-                  ),
-                  child: IconButton(
-                    tooltip: 'Upload PDF',
-                    icon: const Icon(
-                      Icons.upload_file_outlined,
-                      color: Colors.cyanAccent,
-                    ),
+              if (chatProvider.generatedSummaryText != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: OutlinedButton.icon(
                     onPressed: chatProvider.isLoading
                         ? null
-                        : () => _uploadFile(chatProvider),
+                        : () => _downloadSummary(chatProvider),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0A0A0A),
+                      foregroundColor: const Color(0xFFA78BFA),
+                      side: const BorderSide(
+                        color: Color(0xFF27272A),
+                        width: 1,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.download_outlined, size: 18),
+                    label: const Text(
+                      'Download Summary',
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: OutlinedButton.icon(
+                  onPressed: chatProvider.isLoading
+                      ? null
+                      : () => _requestSummary(chatProvider),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0A0A0A),
+                    foregroundColor: const Color(0xFFA78BFA),
+                    side: const BorderSide(
+                      color: Color(0xFF27272A),
+                      width: 1,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.auto_awesome, size: 18),
+                  label: const Text(
+                    'Auto Summary',
+                    style: TextStyle(
+                      fontFamily: 'Roboto',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: OutlinedButton.icon(
+                  onPressed: chatProvider.isLoading
+                      ? null
+                      : () => _uploadFile(chatProvider),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0A0A0A),
+                    foregroundColor: const Color(0xFFA78BFA),
+                    side: const BorderSide(
+                      color: Color(0xFF27272A),
+                      width: 1,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.upload_file_outlined, size: 18),
+                  label: const Text(
+                    'Upload PDF',
+                    style: TextStyle(
+                      fontFamily: 'Roboto',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ),
@@ -190,14 +303,14 @@ class _ChatScreenState extends State<ChatScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           SpinKitPulse(
-                                            color: Colors.cyanAccent,
+                                            color: Color(0xFFA78BFA),
                                             size: 24.0,
                                           ),
                                           SizedBox(width: 12),
                                           Text(
                                             'Thinking...',
                                             style: TextStyle(
-                                              color: Colors.cyanAccent,
+                                              color: Color(0xFFA78BFA),
                                             ),
                                           ),
                                         ],
@@ -215,6 +328,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             return ChatBubble(
                               text: message['text'] ?? '',
                               isUser: message['role'] == 'user',
+                              animate: messageIndex == 0,
                             );
                           },
                         )
@@ -227,15 +341,15 @@ class _ChatScreenState extends State<ChatScreen> {
                               decoration: BoxDecoration(
                                 color: const Color(0x6610161D),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: Colors.cyanAccent.withValues(
-                                    alpha: 0.4,
-                                  ),
+                                  border: Border.all(
+                                color: const Color(0xFFA78BFA).withValues(
+                                  alpha: 0.4,
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.cyanAccent.withValues(
-                                      alpha: 0.15,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFA78BFA).withValues(
+                                    alpha: 0.15,
                                     ),
                                     blurRadius: 24,
                                     spreadRadius: 0.6,
@@ -248,7 +362,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   const Icon(
                                     Icons.radar_rounded,
                                     size: 64,
-                                    color: Colors.cyanAccent,
+                                    color: Color(0xFFA78BFA),
                                   ),
                                   const SizedBox(height: 14),
                                   Text(
@@ -258,7 +372,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                         .textTheme
                                         .titleMedium
                                         ?.copyWith(
-                                          color: Colors.cyanAccent,
+                                          color: const Color(0xFFA78BFA),
                                           letterSpacing: 0.8,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -295,7 +409,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   Text(
                                     'Use the upload control in the top-right corner.',
                                     textAlign: TextAlign.center,
-                                    style: Theme.of(context).textTheme.bodySmall
+                                          style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
                                           color: colorScheme.onSurface
                                               .withValues(alpha: 0.7),
@@ -317,14 +431,14 @@ class _ChatScreenState extends State<ChatScreen> {
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: _inputFocusNode.hasFocus
-                            ? Colors.cyanAccent
-                            : Colors.cyanAccent.withValues(alpha: 0.34),
+                            ? const Color(0xFFA78BFA)
+                            : const Color(0xFFA78BFA).withValues(alpha: 0.34),
                         width: _inputFocusNode.hasFocus ? 1.6 : 1,
                       ),
                       boxShadow: [
                         if (_inputFocusNode.hasFocus)
                           BoxShadow(
-                            color: Colors.cyanAccent.withValues(alpha: 0.28),
+                            color: const Color(0xFFA78BFA).withValues(alpha: 0.28),
                             blurRadius: 18,
                             spreadRadius: 0.6,
                           ),
@@ -354,7 +468,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.cyanAccent.withValues(
+                                color: const Color(0xFFA78BFA).withValues(
                                   alpha: 0.34,
                                 ),
                                 blurRadius: 16,
@@ -367,7 +481,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 : () => _sendMessage(chatProvider),
                             style: FilledButton.styleFrom(
                               padding: const EdgeInsets.all(14),
-                              backgroundColor: Colors.cyanAccent,
+                              backgroundColor: const Color(0xFFA78BFA),
                               foregroundColor: const Color(0xFF001314),
                               shape: const CircleBorder(),
                             ),

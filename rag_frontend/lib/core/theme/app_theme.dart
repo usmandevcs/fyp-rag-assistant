@@ -2,27 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static ThemeData get darkJarvisTheme {
+  static ThemeData get darkVesperTheme {
+    // Softer, more professional palette
     final colorScheme =
         ColorScheme.fromSeed(
-          seedColor: Colors.cyanAccent,
+          seedColor: const Color(0xFF6366F1),
           brightness: Brightness.dark,
         ).copyWith(
-          primary: Colors.cyanAccent,
-          surface: const Color(0xFF121212),
+          primary: const Color(0xFF6366F1), // soft indigo
+          surface: const Color(0xFF1E293B), // slate surface
           onSurface: Colors.white,
-          onPrimary: const Color(0xFF001314),
-          outlineVariant: Colors.cyanAccent.withValues(alpha: 0.22),
+          onPrimary: Colors.white,
+          outlineVariant: const Color(0xFF6366F1).withValues(alpha: 0.12),
         );
 
-    final textTheme = GoogleFonts.rajdhaniTextTheme(
+    final textTheme = GoogleFonts.interTextTheme(
       ThemeData(brightness: Brightness.dark).textTheme,
-    ).apply(bodyColor: Colors.white, displayColor: Colors.cyanAccent);
+    ).apply(bodyColor: Colors.white, displayColor: const Color(0xFF6366F1));
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: const Color(0xFF0D0D0D),
+      scaffoldBackgroundColor: const Color(0xFF0F172A),
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
         centerTitle: false,
@@ -33,33 +34,29 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF15181D),
+        fillColor: const Color(0xFF1E293B),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.cyanAccent.withValues(alpha: 0.28),
-          ),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.cyanAccent.withValues(alpha: 0.28),
-          ),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Colors.cyanAccent, width: 1.3),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.0),
         ),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
+          horizontal: 14,
+          vertical: 12,
         ),
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.65)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: Colors.cyanAccent,
-          foregroundColor: const Color(0xFF001314),
+          backgroundColor: const Color(0xFF6366F1),
+          foregroundColor: Colors.white,
         ),
       ),
     );

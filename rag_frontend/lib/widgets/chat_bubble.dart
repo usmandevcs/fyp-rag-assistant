@@ -2,17 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
 
 class ChatBubble extends StatelessWidget {
-  const ChatBubble({super.key, required this.text, required this.isUser});
+  const ChatBubble({
+    super.key,
+    required this.text,
+    required this.isUser,
+    required this.animate,
+  });
 
   final String text;
   final bool isUser;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
     final backgroundColor = isUser
         ? const Color(0xFF1A1A1A)
         : Colors.transparent;
-    final textColor = isUser ? Colors.white : Colors.cyanAccent;
+    final textColor = isUser ? Colors.white : const Color(0xFFA78BFA);
     final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
     final borderRadius = BorderRadius.only(
       topLeft: const Radius.circular(20),
@@ -40,19 +46,27 @@ class ChatBubble extends StatelessWidget {
                     height: 1.35,
                   ),
                 )
-              : AnimatedTextKit(
-                  key: ValueKey<String>(text),
-                  isRepeatingAnimation: false,
-                  totalRepeatCount: 1,
-                  animatedTexts: [
-                    TypewriterAnimatedText(
+              : animate
+                  ? AnimatedTextKit(
+                      key: ValueKey<String>(text),
+                      isRepeatingAnimation: false,
+                      totalRepeatCount: 1,
+                      animatedTexts: [
+                        TypewriterAnimatedText(
+                          text,
+                          speed: const Duration(milliseconds: 18),
+                          textStyle: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: const Color(0xFFA78BFA), height: 1.35),
+                        ),
+                      ],
+                    )
+                  : Text(
                       text,
-                      speed: const Duration(milliseconds: 18),
-                      textStyle: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: Colors.cyanAccent, height: 1.35),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFFA78BFA),
+                        height: 1.35,
+                      ),
                     ),
-                  ],
-                ),
         ),
       ),
     );

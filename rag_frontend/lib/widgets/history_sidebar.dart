@@ -34,7 +34,7 @@ class HistorySidebar extends StatelessWidget {
                     color: const Color(0x66111111),
                     border: Border(
                       bottom: BorderSide(
-                        color: Colors.cyanAccent.withValues(alpha: 0.35),
+                        color: const Color(0xFFA78BFA).withValues(alpha: 0.35),
                       ),
                     ),
                   ),
@@ -44,11 +44,11 @@ class HistorySidebar extends StatelessWidget {
                       color: const Color(0x33161A1F),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: Colors.cyanAccent.withValues(alpha: 0.6),
+                        color: const Color(0xFFA78BFA).withValues(alpha: 0.6),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.cyanAccent.withValues(alpha: 0.22),
+                          color: const Color(0xFFA78BFA).withValues(alpha: 0.22),
                           blurRadius: 14,
                           spreadRadius: 0.8,
                         ),
@@ -61,7 +61,7 @@ class HistorySidebar extends StatelessWidget {
                         children: [
                           Icon(
                             Icons.memory,
-                            color: Colors.cyanAccent,
+                            color: const Color(0xFFA78BFA),
                             size: 30,
                           ),
                           const SizedBox(width: 10),
@@ -71,9 +71,9 @@ class HistorySidebar extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'JARVIS CORE',
+                                  'VESPER CORE',
                                   style: GoogleFonts.shareTechMono(
-                                    color: Colors.cyanAccent,
+                                    color: const Color(0xFFA78BFA),
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.1,
@@ -103,16 +103,16 @@ class HistorySidebar extends StatelessWidget {
                   ),
                   child: ListTile(
                     tileColor: const Color(0x33222A31),
-                    hoverColor: Colors.cyanAccent.withValues(alpha: 0.12),
+                    hoverColor: const Color(0xFFA78BFA).withValues(alpha: 0.12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                       side: BorderSide(
-                        color: Colors.cyanAccent.withValues(alpha: 0.22),
+                        color: const Color(0xFFA78BFA).withValues(alpha: 0.22),
                       ),
                     ),
                     leading: Icon(
                       Icons.add_circle_outline,
-                      color: Colors.cyanAccent,
+                      color: const Color(0xFFA78BFA),
                     ),
                     title: Text(
                       'New Chat',
@@ -152,14 +152,14 @@ class HistorySidebar extends StatelessWidget {
                       ),
                       leading: const Icon(
                         Icons.hub_outlined,
-                        color: Colors.cyanAccent,
+                        color: Color(0xFFA78BFA),
                       ),
                       title: Text(
                         'Current Document',
                         style: GoogleFonts.shareTechMono(color: Colors.white),
                       ),
                       subtitle: Text(
-                        sessionId,
+                        chatProvider.filename ?? 'Unknown Document',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.shareTechMono(
@@ -169,6 +169,105 @@ class HistorySidebar extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (sessionId != null && sessionId.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Divider(color: colorScheme.outlineVariant),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'PAST DOCUMENTS',
+                    style: GoogleFonts.shareTechMono(
+                      color: const Color(0xFFA78BFA),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+                if (chatProvider.pastSessions.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'No past documents yet',
+                      style: GoogleFonts.shareTechMono(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                else
+                  ...chatProvider.pastSessions.map((session) {
+                    final isCurrent = session['session_id'] == sessionId;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      child: ListTile(
+                        tileColor: isCurrent
+                            ? const Color(0xFFA78BFA).withValues(alpha: 0.12)
+                            : const Color(0x1A222A31),
+                        hoverColor: const Color(0xFFA78BFA).withValues(alpha: 0.1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: isCurrent
+                                ? const Color(0xFFA78BFA)
+                                : const Color(0xFFA78BFA).withValues(alpha: 0.18),
+                          ),
+                        ),
+                        leading: Icon(
+                          Icons.description_outlined,
+                          color: isCurrent
+                              ? const Color(0xFFA78BFA)
+                              : Colors.white.withValues(alpha: 0.6),
+                          size: 18,
+                        ),
+                        title: Text(
+                          session['filename'] ?? 'Unknown',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.shareTechMono(
+                            color: isCurrent
+                                ? const Color(0xFFA78BFA)
+                                : Colors.white.withValues(alpha: 0.8),
+                            fontSize: 12,
+                            fontWeight: isCurrent
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.redAccent,
+                            size: 18,
+                          ),
+                          onPressed: () async {
+                            await chatProvider.removeSession(session['session_id']);
+                          },
+                        ),
+                        onTap: () async {
+                          await chatProvider.loadSession(
+                            session['session_id'],
+                            session['filename'] ?? 'Unknown',
+                          );
+                          if (!context.mounted) {
+                            return;
+                          }
+                          Navigator.pop(context);
+                        },
+                      ),
+                    );
+                  }),
               ],
             ),
           );

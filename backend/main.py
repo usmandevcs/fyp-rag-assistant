@@ -1,6 +1,7 @@
 import os
 import uuid
 import shutil
+from typing import List
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -36,6 +37,25 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+
+
+class SessionResponseItem(BaseModel):
+    session_id: str
+    filename: str
+
+
+class ChatHistoryItem(BaseModel):
+    question: str
+    answer: str
+
+
+class UrlRequest(BaseModel):
+    url: str
+
+
+class TextRequest(BaseModel):
+    text: str
+    filename: str
 
 
 @app.get("/")
@@ -105,6 +125,125 @@ def chat(request: ChatRequest, db: SQLSession = Depends(get_db)):
     return ChatResponse(answer=answer)
 
 
+@app.get("/sessions", response_model=List[SessionResponseItem])
+def get_sessions(db: SQLSession = Depends(get_db)):
+    """Retrieve all sessions ordered by creation date (newest first)."""
+    sessions = db.query(DBSession).order_by(DBSession.created_at.desc()).all()
+    return [
+        SessionResponseItem(session_id=session.id, filename=session.filename)
+        for session in sessions
+    ]
+
+
+@app.get("/chat/{session_id}", response_model=List[ChatHistoryItem])
+def get_chat_history(session_id: str, db: SQLSession = Depends(get_db)):
+    """Retrieve chat history for a specific session ordered by creation date (oldest first)."""
+    messages = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at.asc()).all()
+    return [
+        ChatHistoryItem(question=msg.question, answer=msg.answer)
+        for msg in messages
+    ]
+
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str, db: SQLSession = Depends(get_db)):
+    """Delete a session and its associated chat history."""
+    session = db.query(DBSession).filter(DBSession.id == session_id).first()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    
+    db.delete(session)
+    db.commit()
+    
+    return {"status": "success", "message": "Session deleted"}
+
+
+@app.post("/process_url")
+def process_url(request: UrlRequest, db: SQLSession = Depends(get_db)):
+    """Process a YouTube or Web URL and create a new session."""
+    try:
+        session_id = str(uuid.uuid4())
+        chunk_count = rag_engine.ingest_url(request.url, session_id)
+
+        # Extract filename from URL or use a default
+        filename = request.url.split("/")[-1][:50] or "Web Content"
+
+        # Create database session record
+        db_session = DBSession(
+            id=session_id,
+            filename=filename,
+            chunk_count=chunk_count,
+            file_path=request.url,
+            is_active=True,
+        )
+        db.add(db_session)
+
+        # Create metadata record
+        url_record = UploadedFile(
+            session_id=session_id,
+            original_filename=filename,
+            file_size_bytes=None,
+            upload_status="completed",
+        )
+        db.add(url_record)
+        db.commit()
+
+        return {
+            "session_id": session_id,
+            "filename": filename,
+            "chunks_indexed": chunk_count,
+            "message": "URL processed and indexed. You can now ask questions.",
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process URL: {str(e)}"
+        )
+
+
+@app.post("/process_text")
+def process_text(request: TextRequest, db: SQLSession = Depends(get_db)):
+    """Process raw text and create a new session."""
+    try:
+        session_id = str(uuid.uuid4())
+        chunk_count = rag_engine.ingest_raw_text(request.text, session_id)
+
+        # Create database session record
+        db_session = DBSession(
+            id=session_id,
+            filename=request.filename,
+            chunk_count=chunk_count,
+            file_path=None,
+            is_active=True,
+        )
+        db.add(db_session)
+
+        # Create metadata record
+        text_record = UploadedFile(
+            session_id=session_id,
+            original_filename=request.filename,
+            file_size_bytes=len(request.text),
+            upload_status="completed",
+        )
+        db.add(text_record)
+        db.commit()
+
+        return {
+            "session_id": session_id,
+            "filename": request.filename,
+            "chunks_indexed": chunk_count,
+            "message": "Text processed and indexed. You can now ask questions.",
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process text: {str(e)}"
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
 
@@ -113,3 +252,14 @@ if __name__ == "__main__":
         host=os.getenv("HOST", "127.0.0.1"),
         port=int(os.getenv("PORT", "8000")),
     )
+
+#     ==========================================
+#     Method 2: Local Wi-Fi Network (Emergency)
+#     For physical mobile testing without ADB.
+#     Comment out Method 1 above and uncomment the code below.
+#     ==========================================
+#     uvicorn.run(
+#         app,
+#         host=os.getenv("HOST", "0.0.0.0"), 
+#         port=int(os.getenv("PORT", "8000")),
+#     )
