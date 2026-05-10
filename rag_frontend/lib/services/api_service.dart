@@ -7,7 +7,7 @@ class ApiService {
 
   static const String baseUrl = 'http://127.0.0.1:8000';
   
-//  static const String baseUrl = 'http://<IPv4_ADDRESS>:8000'; // ye method ky liye use karny ky to use in mobile device
+  // static const String baseUrl = 'http://192.168.160.1:8000'; // ye method ky liye use karny ky to use in mobile device
 
   final http.Client _client;
 

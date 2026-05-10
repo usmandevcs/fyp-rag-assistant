@@ -246,6 +246,11 @@ def process_text(request: TextRequest, db: SQLSession = Depends(get_db)):
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # ==========================================
+    # Method 1: Localhost (Default)
+    # This is the default method for local development and testing on the same machine.
+    # If you're testing on a mobile device using ADB port forwarding, keep this method active
 
     uvicorn.run(
         app,
@@ -255,11 +260,11 @@ if __name__ == "__main__":
 
 #     ==========================================
 #     Method 2: Local Wi-Fi Network (Emergency)
-#     For physical mobile testing without ADB.
+#     ye physical mobile testing without ADB ky liye ha.
 #     Comment out Method 1 above and uncomment the code below.
 #     ==========================================
-#     uvicorn.run(
-#         app,
-#         host=os.getenv("HOST", "0.0.0.0"), 
-#         port=int(os.getenv("PORT", "8000")),
-#     )
+    # uvicorn.run(
+    #     app,
+    #     host=os.getenv("HOST", "0.0.0.0"), 
+    #     port=int(os.getenv("PORT", "8000")),
+    # )

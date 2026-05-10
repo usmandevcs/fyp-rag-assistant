@@ -4,7 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 Future<String> downloadSummaryMarkdown({
   required String markdown,
-  String fileName = 'vesper_summary.md',
+  String fileName = 'vesper_summary.txt',
 }) async {
   Directory? targetDirectory;
 

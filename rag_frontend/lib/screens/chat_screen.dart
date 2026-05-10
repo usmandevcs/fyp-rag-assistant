@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:provider/provider.dart';
@@ -60,10 +61,27 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     try {
-      await downloadSummaryMarkdown(
+      final savedPath = await downloadSummaryMarkdown(
         markdown: summary,
-        fileName: 'vesper_summary.md',
+        fileName: 'vesper_summary.txt',
       );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              kIsWeb
+                  ? 'Summary download started: vesper_summary.txt'
+                  : 'Summary saved to $savedPath',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
     } catch (error) {
       if (!mounted) {
         return;
@@ -159,7 +177,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(1),
-                child: Container(
+              child: Container(
                 height: 1,
                 color: const Color(0xFFA78BFA).withValues(alpha: 0.24),
               ),
@@ -207,10 +225,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   style: OutlinedButton.styleFrom(
                     backgroundColor: const Color(0xFF0A0A0A),
                     foregroundColor: const Color(0xFFA78BFA),
-                    side: const BorderSide(
-                      color: Color(0xFF27272A),
-                      width: 1,
-                    ),
+                    side: const BorderSide(color: Color(0xFF27272A), width: 1),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 12,
@@ -239,10 +254,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   style: OutlinedButton.styleFrom(
                     backgroundColor: const Color(0xFF0A0A0A),
                     foregroundColor: const Color(0xFFA78BFA),
-                    side: const BorderSide(
-                      color: Color(0xFF27272A),
-                      width: 1,
-                    ),
+                    side: const BorderSide(color: Color(0xFF27272A), width: 1),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 12,
@@ -341,16 +353,16 @@ class _ChatScreenState extends State<ChatScreen> {
                               decoration: BoxDecoration(
                                 color: const Color(0x6610161D),
                                 borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                color: const Color(0xFFA78BFA).withValues(
-                                  alpha: 0.4,
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFFA78BFA,
+                                  ).withValues(alpha: 0.4),
                                 ),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFA78BFA).withValues(
-                                    alpha: 0.15,
-                                    ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFFA78BFA,
+                                    ).withValues(alpha: 0.15),
                                     blurRadius: 24,
                                     spreadRadius: 0.6,
                                   ),
@@ -409,7 +421,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   Text(
                                     'Use the upload control in the top-right corner.',
                                     textAlign: TextAlign.center,
-                                          style: Theme.of(context).textTheme.bodySmall
+                                    style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
                                           color: colorScheme.onSurface
                                               .withValues(alpha: 0.7),
@@ -438,7 +450,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       boxShadow: [
                         if (_inputFocusNode.hasFocus)
                           BoxShadow(
-                            color: const Color(0xFFA78BFA).withValues(alpha: 0.28),
+                            color: const Color(
+                              0xFFA78BFA,
+                            ).withValues(alpha: 0.28),
                             blurRadius: 18,
                             spreadRadius: 0.6,
                           ),
@@ -468,9 +482,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFA78BFA).withValues(
-                                  alpha: 0.34,
-                                ),
+                                color: const Color(
+                                  0xFFA78BFA,
+                                ).withValues(alpha: 0.34),
                                 blurRadius: 16,
                               ),
                             ],
