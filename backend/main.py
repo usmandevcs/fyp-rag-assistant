@@ -1,6 +1,12 @@
 import os
+import certifi
+
+# This forces Python to bypass the Windows Certificate Store and use certifi
+os.environ["SSL_CERT_FILE"] = certifi.where()
+
 import uuid
 import shutil
+import tempfile
 from typing import List
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +43,15 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    sources: List[str] = []
+    follow_ups: List[str] = []
+
+
+class VoiceChatResponse(BaseModel):
+    question: str
+    answer: str
+    sources: List[str] = []
+    follow_ups: List[str] = []
 
 
 class SessionResponseItem(BaseModel):
@@ -61,6 +76,18 @@ class TextRequest(BaseModel):
 @app.get("/")
 def root():
     return {"status": "running", "message": "Document Q&A API is live."}
+
+
+@app.get("/api/status")
+async def api_status():
+    """Retrieve the API key usage status for Groq and Gemini."""
+    try:
+        status = rag_engine.get_api_status()
+        if "error" in status:
+            raise HTTPException(status_code=500, detail=status["error"])
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get API status: {str(e)}")
 
 
 @app.post("/upload")
@@ -111,7 +138,10 @@ def chat(request: ChatRequest, db: SQLSession = Depends(get_db)):
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    answer = rag_engine.ask_question(request.session_id, request.question)
+    result = rag_engine.ask_question(request.session_id, request.question)
+    answer = result["answer"]
+    sources = result.get("sources", [])
+    follow_ups = result.get("follow_ups", [])
     
     # Store chat message in database
     chat_message = ChatMessage(
@@ -122,7 +152,116 @@ def chat(request: ChatRequest, db: SQLSession = Depends(get_db)):
     db.add(chat_message)
     db.commit()
     
-    return ChatResponse(answer=answer)
+    return ChatResponse(answer=answer, sources=sources, follow_ups=follow_ups)
+
+
+@app.post("/chat_voice", response_model=VoiceChatResponse)
+async def chat_voice(
+    session_id: str = File(...),
+    audio: UploadFile = File(...),
+    db: SQLSession = Depends(get_db),
+):
+    """Accept an audio file, transcribe it, and answer the question from the document."""
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id is required.")
+
+    # Determine file suffix from the uploaded filename (e.g. .m4a, .wav, .webm)
+    suffix = os.path.splitext(audio.filename or ".wav")[1] or ".wav"
+
+    tmp_path = None
+    try:
+        # Save the uploaded audio to a temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=UPLOAD_DIR) as tmp:
+            shutil.copyfileobj(audio.file, tmp)
+            tmp_path = tmp.name
+
+        # Transcribe the audio to text
+        question = rag_engine.transcribe_audio(tmp_path)
+
+        # Ask the RAG engine
+        result = rag_engine.ask_question(session_id, question)
+        answer = result["answer"]
+        sources = result.get("sources", [])
+        follow_ups = result.get("follow_ups", [])
+
+        # Store chat message in database
+        chat_message = ChatMessage(
+            session_id=session_id,
+            question=question,
+            answer=answer,
+        )
+        db.add(chat_message)
+        db.commit()
+
+        return VoiceChatResponse(question=question, answer=answer, sources=sources, follow_ups=follow_ups)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Voice chat failed: {str(e)}"
+        )
+    finally:
+        # Clean up temp file
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+
+class MultiChatRequest(BaseModel):
+    session_ids: List[str]
+    question: str
+
+
+@app.post("/chat_multi", response_model=ChatResponse)
+def chat_multi(request: MultiChatRequest, db: SQLSession = Depends(get_db)):
+    """Query multiple documents simultaneously and return a unified answer."""
+    if not request.session_ids:
+        raise HTTPException(status_code=400, detail="At least one session_id is required.")
+    if not request.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    try:
+        result = rag_engine.ask_multiple_questions(request.session_ids, request.question)
+        answer = result["answer"]
+        sources = result.get("sources", [])
+        follow_ups = result.get("follow_ups", [])
+
+        # Store a chat record under the first session for history tracking
+        chat_message = ChatMessage(
+            session_id=request.session_ids[0],
+            question=request.question,
+            answer=answer,
+        )
+        db.add(chat_message)
+        db.commit()
+
+        return ChatResponse(answer=answer, sources=sources, follow_ups=follow_ups)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Multi-document chat failed: {str(e)}"
+        )
+
+
+class SummaryResponse(BaseModel):
+    overview: str = ""
+    key_findings: List[str] = []
+    critical_data_points: List[str] = []
+    conclusion: str = ""
+
+
+@app.get("/summary/{session_id}", response_model=SummaryResponse)
+def get_structured_summary(session_id: str):
+    """Generate a structured summary dashboard for the given document session."""
+    try:
+        result = rag_engine.generate_structured_summary(session_id)
+        return SummaryResponse(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Summary generation failed: {str(e)}"
+        )
 
 
 @app.get("/sessions", response_model=List[SessionResponseItem])
@@ -161,9 +300,44 @@ def delete_session(session_id: str, db: SQLSession = Depends(get_db)):
 
 @app.post("/process_url")
 def process_url(request: UrlRequest, db: SQLSession = Depends(get_db)):
-    """Process a YouTube or Web URL and create a new session."""
+    """Process a YouTube, Web, or Google Drive URL and create a new session."""
     try:
         session_id = str(uuid.uuid4())
+
+        # --- Google Drive link branch ---
+        if "drive.google.com" in request.url:
+            file_path = os.path.join(UPLOAD_DIR, f"{session_id}.pdf")
+            rag_engine.download_drive_pdf(request.url, file_path)
+            chunk_count = rag_engine.ingest_pdf(file_path, session_id)
+            filename = "Drive Document"
+
+            # Create database session record (same pattern as /upload)
+            db_session = DBSession(
+                id=session_id,
+                filename=filename,
+                chunk_count=chunk_count,
+                file_path=file_path,
+                is_active=True,
+            )
+            db.add(db_session)
+
+            upload_record = UploadedFile(
+                session_id=session_id,
+                original_filename=filename,
+                file_size_bytes=os.path.getsize(file_path),
+                upload_status="completed",
+            )
+            db.add(upload_record)
+            db.commit()
+
+            return {
+                "session_id": session_id,
+                "filename": filename,
+                "chunks_indexed": chunk_count,
+                "message": "Google Drive PDF processed and indexed. You can now ask questions.",
+            }
+
+        # --- Existing YouTube / Web URL branch ---
         chunk_count = rag_engine.ingest_url(request.url, session_id)
 
         # Extract filename from URL or use a default

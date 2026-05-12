@@ -56,7 +56,7 @@ class ApiService {
     }
   }
 
-  Future<String> askQuestion({
+  Future<Map<String, dynamic>> askQuestion({
     required String sessionId,
     required String question,
   }) async {
@@ -67,7 +67,7 @@ class ApiService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: jsonEncode(<String, String>{
+        body: jsonEncode(<String, dynamic>{
           'session_id': sessionId,
           'question': question,
         }),
@@ -89,11 +89,117 @@ class ApiService {
         throw const ApiException('Chat response did not include an answer.');
       }
 
-      return answer;
+      // Parse sources list; default to empty if absent or wrong type
+      final rawSources = decoded['sources'];
+      final sources = rawSources is List
+          ? rawSources.whereType<String>().toList()
+          : <String>[];
+
+      // Parse follow_ups list
+      final rawFollowUps = decoded['follow_ups'];
+      final followUps = rawFollowUps is List
+          ? rawFollowUps.whereType<String>().toList()
+          : <String>[];
+
+      return <String, dynamic>{
+        'answer': answer,
+        'sources': sources,
+        'follow_ups': followUps,
+      };
     } on ApiException {
       rethrow;
     } catch (error) {
       throw ApiException('Failed to ask question: $error');
+    }
+  }
+
+  /// Ask a question across multiple document sessions via `/chat_multi`.
+  Future<Map<String, dynamic>> askMultiQuestion({
+    required List<String> sessionIds,
+    required String question,
+  }) async {
+    try {
+      final response = await _client.post(
+        Uri.parse('$baseUrl/chat_multi'),
+        headers: const <String, String>{
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'session_ids': sessionIds,
+          'question': question,
+        }),
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          'Multi-chat request failed with status ${response.statusCode}: ${response.body}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const ApiException(
+          'Multi-chat response was not a valid JSON object.',
+        );
+      }
+
+      final answer = decoded['answer'];
+      if (answer is! String || answer.isEmpty) {
+        throw const ApiException(
+          'Multi-chat response did not include an answer.',
+        );
+      }
+
+      final rawSources = decoded['sources'];
+      final sources = rawSources is List
+          ? rawSources.whereType<String>().toList()
+          : <String>[];
+
+      final rawFollowUps = decoded['follow_ups'];
+      final followUps = rawFollowUps is List
+          ? rawFollowUps.whereType<String>().toList()
+          : <String>[];
+
+      return <String, dynamic>{
+        'answer': answer,
+        'sources': sources,
+        'follow_ups': followUps,
+      };
+    } on ApiException {
+      rethrow;
+    } catch (error) {
+      throw ApiException('Failed to ask multi-document question: $error');
+    }
+  }
+
+  /// Fetch a structured summary from `/summary/{session_id}`.
+  /// Returns a map with keys: overview, key_findings, critical_data_points, conclusion.
+  Future<Map<String, dynamic>> fetchStructuredSummary(String sessionId) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/summary/$sessionId'),
+        headers: const <String, String>{'Accept': 'application/json'},
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          'Summary request failed with status ${response.statusCode}: ${response.body}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const ApiException(
+          'Summary response was not a valid JSON object.',
+        );
+      }
+
+      return decoded;
+    } on ApiException {
+      rethrow;
+    } catch (error) {
+      throw ApiException('Failed to fetch structured summary: $error');
     }
   }
 
@@ -215,6 +321,67 @@ class ApiService {
     }
   }
 
+  /// Send recorded audio to `/chat_voice` for transcription + RAG answer.
+  /// Returns a map with `question`, `answer`, and `sources`.
+  Future<Map<String, dynamic>> sendVoiceMessage({
+    required String sessionId,
+    required List<int> audioBytes,
+    required String fileName,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/chat_voice'),
+      );
+
+      // session_id is sent as a form field (File(...) in FastAPI)
+      request.fields['session_id'] = sessionId;
+
+      request.files.add(
+        http.MultipartFile.fromBytes('audio', audioBytes, filename: fileName),
+      );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          'Voice chat failed with status ${response.statusCode}: ${response.body}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const ApiException(
+          'Voice chat response was not a valid JSON object.',
+        );
+      }
+
+      final question = decoded['question'];
+      final answer = decoded['answer'];
+      if (question is! String || answer is! String) {
+        throw const ApiException(
+          'Voice chat response missing question or answer.',
+        );
+      }
+
+      final rawSources = decoded['sources'];
+      final sources = rawSources is List
+          ? rawSources.whereType<String>().toList()
+          : <String>[];
+
+      return <String, dynamic>{
+        'question': question,
+        'answer': answer,
+        'sources': sources,
+      };
+    } on ApiException {
+      rethrow;
+    } catch (error) {
+      throw ApiException('Failed to send voice message: $error');
+    }
+  }
+
   Future<String> processText(String text, String filename) async {
     try {
       final response = await _client.post(
@@ -250,6 +417,31 @@ class ApiService {
       rethrow;
     } catch (error) {
       throw ApiException('Failed to process text: $error');
+    }
+  }
+
+  Future<Map<String, dynamic>> getApiStatus() async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/api/status'),
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          'API status request failed with status ${response.statusCode}: ${response.body}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const ApiException('API status response was not a valid JSON object.');
+      }
+
+      return decoded;
+    } on ApiException {
+      rethrow;
+    } catch (error) {
+      throw ApiException('Failed to fetch API status: $error');
     }
   }
 }

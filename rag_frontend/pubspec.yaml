@@ -42,7 +42,23 @@ dependencies:
   animated_text_kit: ^4.3.0
   flutter_spinkit: ^5.2.2
   web: any
+  
+  # Voice Mode Dependencies
+  # record: Audio recording package for capturing microphone input
+  # ANDROID PERMISSIONS: Add to android/app/src/main/AndroidManifest.xml
+  #   <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  # iOS PERMISSIONS: Add to ios/Runner/Info.plist
+  #   <key>NSMicrophoneUsageDescription</key>
+  #   <string>This app needs microphone access to record your voice for voice input.</string>
+  record: ^6.2.0
+  
+  # path_provider: Access to common directories (Documents, Temp) for storing audio files
   path_provider: ^2.1.5
+  
+  # flutter_tts: Text-to-Speech functionality for reading responses aloud
+  # iOS: No additional permissions required (TTS is built-in)
+  # Android: No additional permissions required (TTS is built-in)
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:

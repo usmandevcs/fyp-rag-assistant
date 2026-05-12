@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'package:frontend/providers/chat_provider.dart';
 import 'package:frontend/screens/chat_screen.dart';
+import 'package:frontend/utils/custom_snackbar.dart';
 import 'package:frontend/widgets/history_sidebar.dart';
 
 const Color _vesperBlack = Color(0xFF0A0A0A);
@@ -53,16 +54,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (error == null || error.isEmpty || error == _lastShownError) return;
     _lastShownError = error;
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(error),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      CustomSnackBar.showError(context, error);
     });
   }
 
@@ -324,7 +317,7 @@ class _LinkTab extends StatefulWidget {
   State<_LinkTab> createState() => _LinkTabState();
 }
 
-enum _LinkType { none, youtube, web }
+enum _LinkType { none, youtube, web, drive }
 
 class _LinkTabState extends State<_LinkTab> {
   _LinkType _selected = _LinkType.none;
@@ -411,6 +404,13 @@ class _LinkTabState extends State<_LinkTab> {
           subtitle: 'Extract text from any website',
           onTap: () => _select(_LinkType.web),
         ),
+        _choiceCard(
+          context,
+          icon: Icons.add_to_drive_outlined,
+          title: 'Google Drive PDF',
+          subtitle: 'Process shared Drive links',
+          onTap: () => _select(_LinkType.drive),
+        ),
       ];
 
       return SizedBox(
@@ -421,6 +421,8 @@ class _LinkTabState extends State<_LinkTab> {
                   children[0],
                   const SizedBox(height: 12),
                   children[1],
+                  const SizedBox(height: 12),
+                  children[2],
                 ],
               )
             : Row(
@@ -428,6 +430,8 @@ class _LinkTabState extends State<_LinkTab> {
                   Expanded(child: children[0]),
                   const SizedBox(width: 12),
                   Expanded(child: children[1]),
+                  const SizedBox(width: 12),
+                  Expanded(child: children[2]),
                 ],
               ),
       );
@@ -466,8 +470,26 @@ class _LinkTabState extends State<_LinkTab> {
   }
 
   Widget _buildInput(BuildContext context) {
-    final isYoutube = _selected == _LinkType.youtube;
-    final label = isYoutube ? 'YouTube URL' : 'Article URL';
+    final String label;
+    final String hint;
+    final IconData prefixIcon;
+
+    switch (_selected) {
+      case _LinkType.youtube:
+        label = 'YouTube URL';
+        hint = 'https://youtube.com/...';
+        prefixIcon = Icons.smart_display_outlined;
+        break;
+      case _LinkType.drive:
+        label = 'Google Drive URL';
+        hint = 'https://drive.google.com/file/d/...';
+        prefixIcon = Icons.add_to_drive_outlined;
+        break;
+      default:
+        label = 'Article URL';
+        hint = 'https://example.com/article';
+        prefixIcon = Icons.article_outlined;
+    }
 
     return Container(
       key: const ValueKey('input'),
@@ -492,9 +514,9 @@ class _LinkTabState extends State<_LinkTab> {
             controller: widget.urlController,
             style: const TextStyle(color: Colors.white, fontFamily: 'Roboto'),
             decoration: InputDecoration(
-              hintText: isYoutube ? 'https://youtube.com/...' : 'https://example.com/article',
+              hintText: hint,
               hintStyle: const TextStyle(color: _vesperTextMuted, fontFamily: 'Roboto'),
-              prefixIcon: Icon(isYoutube ? Icons.smart_display_outlined : Icons.article_outlined, color: _vesperCyan),
+              prefixIcon: Icon(prefixIcon, color: _vesperCyan),
               filled: true,
               fillColor: _vesperBlack,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _vesperBorder, width: 1)),

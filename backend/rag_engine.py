@@ -1,5 +1,7 @@
 import os
+import json
 import tempfile
+import gdown
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
@@ -16,7 +18,7 @@ import trafilatura
 
 load_dotenv()
 
-# --- Config ---
+# --- Config --- #
 CHROMA_DIR = "chroma_db"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
@@ -47,6 +49,7 @@ _embeddings = None
 _llm = None
 _embedding_key_index = -1
 _groq_key_index = -1
+_groq_requests_count = 0
 
 
 class ChromaSafeGoogleEmbeddings(GoogleGenerativeAIEmbeddings):
@@ -96,7 +99,59 @@ def _get_next_groq_key() -> str:
     return GROQ_API_KEYS[_groq_key_index]
 
 
+def transcribe_audio(file_path: str) -> str:
+    """Transcribe an audio file using Groq Whisper. Returns the transcribed text."""
+    if not GROQ_API_KEYS:
+        raise ValueError("GROQ_API_KEYS is empty. Provide at least one Groq API key.")
 
+    last_error: Exception | None = None
+    for _ in range(min(len(GROQ_API_KEYS), 3)):
+        try:
+            client = Groq(api_key=_get_next_groq_key())
+            with open(file_path, "rb") as audio_file:
+                transcription = client.audio.transcriptions.create(
+                    file=audio_file,
+                    model="whisper-large-v3",
+                )
+            text = transcription.text if hasattr(transcription, "text") else str(transcription)
+            if not text or not text.strip():
+                raise ValueError("Transcription returned empty text.")
+            return text.strip()
+        except Exception as e:
+            last_error = e
+            if not _is_quota_error(e):
+                raise
+
+    raise ValueError(
+        f"Audio transcription failed after retrying with available Groq keys: {last_error}"
+    )
+
+
+def get_api_status() -> dict:
+    """Returns the current API key usage status."""
+    try:
+        groq_total = len(GROQ_API_KEYS)
+        groq_active = max(0, _groq_key_index)
+        
+        # Calculate dynamic usage based on tracking counter with a mock limit of 100
+        groq_usage = round((_groq_requests_count / 100) * 100)
+
+        google_total = len(GOOGLE_API_KEYS)
+        google_active = max(0, _embedding_key_index)
+        google_usage = round((google_active / max(1, google_total)) * 100)
+
+        return {
+            "groq_status": "Healthy" if groq_total > 0 else "Offline",
+            "groq_active_key": groq_active,
+            "groq_total_keys": groq_total,
+            "groq_usage_percent": groq_usage,
+            "google_status": "Healthy" if google_total > 0 else "Offline",
+            "google_active_key": google_active,
+            "google_total_keys": google_total,
+            "google_usage_percent": google_usage,
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def _get_embeddings() -> GoogleGenerativeAIEmbeddings:
@@ -151,6 +206,35 @@ def _rebuild_chain_for_session(session_id: str) -> None:
         collection_name=session_id,
     )
     _chains[session_id] = _build_chain(vectorstore)
+
+
+def download_drive_pdf(url: str, output_path: str) -> str:
+    """Download a PDF from a Google Drive share link using gdown.
+
+    Args:
+        url: Any Google Drive file URL (share link, direct link, etc.).
+        output_path: Full local path where the downloaded file should be saved.
+
+    Returns:
+        The path to the downloaded file.
+
+    Raises:
+        ValueError: If the download fails or the URL is not accessible.
+    """
+    try:
+        result = gdown.download(url, output_path, quiet=False)
+    except Exception as exc:
+        raise ValueError(
+            f"Failed to download from Google Drive: {exc}"
+        ) from exc
+
+    if result is None or not os.path.exists(output_path):
+        raise ValueError(
+            "Could not download the file from Google Drive. "
+            "Make sure the link is publicly shared."
+        )
+
+    return output_path
 
 
 def ingest_pdf(file_path: str, session_id: str) -> int:
@@ -352,9 +436,42 @@ def ingest_raw_text(text: str, session_id: str) -> int:
     _chat_histories[session_id] = []
 
     return len(chunks)
-def ask_question(session_id: str, question: str) -> str:
-    """Ask a question against the session's document. Returns answer string."""
-    if session_id not in _chains:
+
+
+def _parse_chat_json(raw_text: str) -> tuple[str, list[str]]:
+    """Parse JSON response from the LLM, fallback to gracefully returning an error if invalid."""
+    cleaned = raw_text.replace('```json', '').replace('```', '').strip()
+
+    parsed = None
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+        
+    if parsed is None:
+        import re
+        match = re.search(r'\{[\s\S]*\}', cleaned)
+        if match:
+            try:
+                parsed = json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
+    if parsed and isinstance(parsed, dict):
+        ans = parsed.get("answer", "Error parsing JSON")
+        if not isinstance(ans, str):
+            ans = str(ans)
+        follow_ups = parsed.get("follow_ups", [])
+        if not isinstance(follow_ups, list):
+            follow_ups = []
+        return ans, follow_ups
+        
+    return "Error parsing JSON", []
+
+def ask_question(session_id: str, question: str) -> dict:
+    """Ask a question against the session's document. Returns dict with 'answer' and 'sources'."""
+    chain_key = session_id
+    if chain_key not in _chains:
         # Try to reload from disk if server restarted
         try:
             vectorstore = Chroma(
@@ -362,32 +479,257 @@ def ask_question(session_id: str, question: str) -> str:
                 embedding_function=_get_embeddings(),
                 collection_name=session_id
             )
-            _chains[session_id] = _build_chain(vectorstore)
+            _chains[chain_key] = _build_chain(vectorstore)
             _chat_histories.setdefault(session_id, [])
         except Exception:
-            return "No document found for this session. Please upload a PDF first."
+            return {"answer": "No document found for this session. Please upload a PDF first.", "sources": []}
 
-    chain = _chains[session_id]
+    chain = _chains[chain_key]
     chat_history = _chat_histories.setdefault(session_id, [])
     try:
         result = chain.invoke({"question": question, "chat_history": chat_history})
-        answer = result["answer"]
+        
+        global _groq_requests_count
+        _groq_requests_count += 1
+        
+        raw_answer = result["answer"]
+        answer, follow_ups = _parse_chat_json(raw_answer)
         chat_history.append((question, answer))
-        return answer
+
+        # Extract unique sources from returned source documents
+        sources = []
+        seen = set()
+        for doc in result.get("source_documents", []):
+            meta = doc.metadata or {}
+            if "page" in meta:
+                label = f"Page {int(meta['page']) + 1}"
+            elif "source" in meta:
+                label = meta["source"]
+            else:
+                continue
+            if label not in seen:
+                seen.add(label)
+                sources.append(label)
+
+        return {"answer": answer, "sources": sources, "follow_ups": follow_ups}
     except Exception as first_error:
         if not _is_retryable_llm_error(first_error):
             raise
 
-        return "Chat generation failed. Please try again later."
+        return {"answer": "Chat generation failed. Please try again later.", "sources": []}
+
+
+def ask_multiple_questions(session_ids: list[str], question: str) -> dict:
+    """Query multiple document sessions simultaneously and return a unified answer."""
+    if not session_ids:
+        return {"answer": "No session IDs provided.", "sources": []}
+    if not question or not question.strip():
+        return {"answer": "Question cannot be empty.", "sources": []}
+
+    all_docs = []
+    for sid in session_ids:
+        try:
+            vectorstore = Chroma(
+                persist_directory=CHROMA_DIR,
+                embedding_function=_get_embeddings(),
+                collection_name=sid,
+            )
+            retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+            docs = retriever.invoke(question)
+            all_docs.extend(docs)
+        except Exception:
+            # Skip sessions whose collection can't be loaded (deleted, etc.)
+            continue
+
+    if not all_docs:
+        return {
+            "answer": "No relevant content found in the selected documents.",
+            "sources": [],
+        }
+
+    # Build combined context string
+    context_parts = []
+    for doc in all_docs:
+        context_parts.append(doc.page_content)
+
+    combined_context = "\n\n---\n\n".join(context_parts)
+
+    # Build the prompt
+    prompt = (
+        "You are Vesper Core, an enterprise AI assistant. Provide a highly accurate, professional, and clear answer based on the context.\n\n"
+        "Use ONLY the following context retrieved from multiple documents to answer the user's question. "
+        "If the context does not contain enough information, say so.\n\n"
+        "CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do not wrap the JSON in markdown formatting or backticks (e.g., do not use ```json). Do not include any introductory or concluding text outside the JSON.\n"
+        "Required JSON Schema:\n"
+        "{\n"
+        '   "answer": "<Your response here>",\n'
+        '   "follow_ups": ["<Q1>", "<Q2>", "<Q3>"]\n'
+        "}\n\n"
+        "----------------\n"
+        f"Context:\n{combined_context}\n\n"
+        "----------------\n"
+        f"Question: {question}\n\n"
+        "JSON Output:"
+    )
+
+    # Generate answer using the shared LLM
+    try:
+        llm = _get_llm()
+        response = llm.invoke(prompt)
+        raw_answer = response.content if hasattr(response, "content") else str(response)
+        answer, follow_ups = _parse_chat_json(raw_answer)
+    except Exception as e:
+        if _is_retryable_llm_error(e):
+            return {"answer": "Chat generation failed. Please try again later.", "sources": [], "follow_ups": []}
+        raise
+
+    # Extract unique source labels
+    sources = []
+    seen: set[str] = set()
+    for doc in all_docs:
+        meta = doc.metadata or {}
+        if "page" in meta:
+            label = f"Page {int(meta['page']) + 1}"
+        elif "source" in meta:
+            label = meta["source"]
+        else:
+            continue
+        if label not in seen:
+            seen.add(label)
+            sources.append(label)
+
+    return {"answer": answer, "sources": sources, "follow_ups": follow_ups}
+
+
+def generate_structured_summary(session_id: str) -> dict:
+    """Generate a structured JSON summary of the document in the given session."""
+    # Load the vectorstore for this session
+    try:
+        vectorstore = Chroma(
+            persist_directory=CHROMA_DIR,
+            embedding_function=_get_embeddings(),
+            collection_name=session_id,
+        )
+    except Exception:
+        raise ValueError(f"No document found for session '{session_id}'.")
+
+    # Retrieve a broad set of representative chunks
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
+    docs = retriever.invoke("summarize the entire document")
+
+    if not docs:
+        raise ValueError("No document content found for this session.")
+
+    # Build combined context from retrieved chunks
+    context = "\n\n---\n\n".join(doc.page_content for doc in docs)
+
+    prompt = (
+        "You are an expert document analyst. Analyze the following document content "
+        "and produce a structured summary.\n\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "- You MUST output ONLY a valid JSON object. No markdown, no code fences, no extra text.\n"
+        "- The JSON object MUST have exactly these four keys:\n"
+        '  1. "overview" — A concise 2-3 sentence overview of the document.\n'
+        '  2. "key_findings" — A JSON array of 3-5 key findings (strings).\n'
+        '  3. "critical_data_points" — A JSON array of 3-5 important data points, '
+        'statistics, or facts (strings).\n'
+        '  4. "conclusion" — A 2-3 sentence conclusion summarizing the implications.\n\n'
+        f"Document Content:\n{context}\n\n"
+        "JSON Output:"
+    )
+
+    try:
+        llm = _get_llm()
+        response = llm.invoke(prompt)
+        raw = response.content if hasattr(response, "content") else str(response)
+    except Exception as e:
+        if _is_retryable_llm_error(e):
+            raise ValueError("Summary generation failed due to API limits. Please try again later.")
+        raise
+
+    # Strip markdown code fences if the LLM wraps its output
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        # Remove opening fence (e.g. ```json)
+        cleaned = cleaned.split("\n", 1)[-1] if "\n" in cleaned else cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3].rstrip()
+
+    parsed = None
+    # Attempt 1: Direct parse
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # Attempt 2: Extract first JSON object via braces
+    if parsed is None:
+        import re
+        match = re.search(r'\{[\s\S]*\}', cleaned)
+        if match:
+            try:
+                parsed = json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
+    # Fallback: return raw text under "overview"
+    if parsed is None:
+        parsed = {
+            "overview": cleaned,
+            "key_findings": [],
+            "critical_data_points": [],
+            "conclusion": "",
+        }
+
+    # Normalise keys to the expected schema
+    return {
+        "overview": parsed.get("overview", parsed.get("Overview", "")),
+        "key_findings": parsed.get("key_findings", parsed.get("Key Findings", [])),
+        "critical_data_points": parsed.get(
+            "critical_data_points", parsed.get("Critical Data Points", [])
+        ),
+        "conclusion": parsed.get("conclusion", parsed.get("Conclusion", "")),
+    }
+
+
+def _get_prompt():
+    from langchain_core.prompts import (
+        ChatPromptTemplate,
+        HumanMessagePromptTemplate,
+        SystemMessagePromptTemplate,
+    )
+
+    system_template = """You are Vesper Core, an enterprise AI assistant. Provide a highly accurate, professional, and clear answer based on the context.
+
+Use the following pieces of context to answer the users question. 
+If you don't know the answer, just say that you don't know, don't try to make up an answer.
+----------------
+{context}
+
+CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do not wrap the JSON in markdown formatting or backticks (e.g., do not use ```json). Do not include any introductory or concluding text outside the JSON. 
+Required JSON Schema:
+{{
+   "answer": "<Your persona-adjusted response here>",
+   "follow_ups": ["<Q1>", "<Q2>", "<Q3>"]
+}}"""
+
+    messages = [
+        SystemMessagePromptTemplate.from_template(system_template),
+        HumanMessagePromptTemplate.from_template("{question}"),
+    ]
+    return ChatPromptTemplate.from_messages(messages)
 
 
 def _build_chain(vectorstore: Chroma) -> ConversationalRetrievalChain:
     """Build a ConversationalRetrievalChain."""
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+    
+    prompt = _get_prompt()
 
     return ConversationalRetrievalChain.from_llm(
         llm=_get_llm(),
         retriever=retriever,
-        return_source_documents=False,
+        return_source_documents=True,
+        combine_docs_chain_kwargs={"prompt": prompt},
         verbose=False
     )

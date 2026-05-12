@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'package:frontend/providers/chat_provider.dart';
+import 'package:frontend/screens/chat_screen.dart';
 import 'package:frontend/screens/home_screen.dart';
 
 class HistorySidebar extends StatelessWidget {
@@ -205,28 +206,39 @@ class HistorySidebar extends StatelessWidget {
                   )
                 else
                   ...chatProvider.pastSessions.map((session) {
-                    final isCurrent = session['session_id'] == sessionId;
+                    final sid = session['session_id'] as String?;
+                    final isCurrent = sid == sessionId;
+                    final isSelected = sid != null &&
+                        chatProvider.selectedSessionIds.contains(sid);
                     return Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 4,
                       ),
                       child: ListTile(
-                        tileColor: isCurrent
-                            ? const Color(0xFFA78BFA).withValues(alpha: 0.12)
-                            : const Color(0x1A222A31),
-                        hoverColor: const Color(0xFFA78BFA).withValues(alpha: 0.1),
+                        tileColor: isSelected
+                            ? const Color(0xFFA78BFA).withValues(alpha: 0.18)
+                            : isCurrent
+                                ? const Color(0xFFA78BFA)
+                                    .withValues(alpha: 0.12)
+                                : const Color(0x1A222A31),
+                        hoverColor:
+                            const Color(0xFFA78BFA).withValues(alpha: 0.1),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                           side: BorderSide(
-                            color: isCurrent
+                            color: isSelected
                                 ? const Color(0xFFA78BFA)
-                                : const Color(0xFFA78BFA).withValues(alpha: 0.18),
+                                : isCurrent
+                                    ? const Color(0xFFA78BFA)
+                                    : const Color(0xFFA78BFA)
+                                        .withValues(alpha: 0.18),
+                            width: isSelected ? 1.4 : 1,
                           ),
                         ),
                         leading: Icon(
                           Icons.description_outlined,
-                          color: isCurrent
+                          color: isCurrent || isSelected
                               ? const Color(0xFFA78BFA)
                               : Colors.white.withValues(alpha: 0.6),
                           size: 18,
@@ -236,24 +248,62 @@ class HistorySidebar extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.shareTechMono(
-                            color: isCurrent
+                            color: isCurrent || isSelected
                                 ? const Color(0xFFA78BFA)
                                 : Colors.white.withValues(alpha: 0.8),
                             fontSize: 12,
-                            fontWeight: isCurrent
+                            fontWeight: isCurrent || isSelected
                                 ? FontWeight.w600
                                 : FontWeight.w400,
                           ),
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
-                            size: 18,
-                          ),
-                          onPressed: () async {
-                            await chatProvider.removeSession(session['session_id']);
-                          },
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Multi-doc selection checkbox
+                            SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: Checkbox(
+                                value: isSelected,
+                                onChanged: sid == null
+                                    ? null
+                                    : (_) => chatProvider
+                                        .toggleSessionSelection(sid),
+                                activeColor: const Color(0xFFA78BFA),
+                                checkColor: const Color(0xFF0D0D12),
+                                side: BorderSide(
+                                  color: const Color(0xFFA78BFA)
+                                      .withValues(alpha: 0.5),
+                                  width: 1.6,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            // Delete button
+                            SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.redAccent,
+                                  size: 18,
+                                ),
+                                onPressed: () async {
+                                  await chatProvider
+                                      .removeSession(session['session_id']);
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                         onTap: () async {
                           await chatProvider.loadSession(
@@ -263,7 +313,13 @@ class HistorySidebar extends StatelessWidget {
                           if (!context.mounted) {
                             return;
                           }
-                          Navigator.pop(context);
+                          Navigator.pop(context); // close the drawer
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const ChatScreen(),
+                            ),
+                            (route) => false,
+                          );
                         },
                       ),
                     );
