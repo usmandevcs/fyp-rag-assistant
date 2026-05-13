@@ -8,10 +8,10 @@ import 'package:frontend/screens/chat_screen.dart';
 import 'package:frontend/utils/custom_snackbar.dart';
 import 'package:frontend/widgets/history_sidebar.dart';
 
-const Color _vesperBlack = Color(0xFF0A0A0A);
-const Color _vesperSurface = Color(0xFF141414);
-const Color _vesperCyan = Color(0xFFA78BFA);
-const Color _vesperBorder = Color(0xFF27272A);
+const Color _vesperBlack = Color(0xFF1A1A1D);
+const Color _vesperSurface = Color(0xFF2D2D34);
+const Color _vesperCyan = Color(0xFFFF5F1F);
+const Color _vesperBorder = Color(0xFF2D2D34);
 const Color _vesperTextMuted = Color(0xFFA1A1AA);
 
 class HomeScreen extends StatefulWidget {
@@ -219,7 +219,7 @@ class _DocumentTab extends StatelessWidget {
                   'VESPER CORE',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: _vesperCyan,
                     fontFamily: 'Roboto',
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -253,11 +253,12 @@ class _DocumentTab extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: chatProvider.isLoading ? null : () => onUploadAndOpenChat(context, chatProvider),
                     style: FilledButton.styleFrom(
-                      backgroundColor: _vesperCyan,
-                      foregroundColor: _vesperBlack,
+                      backgroundColor: _vesperSurface,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: _vesperCyan, width: 1),
                       ),
                       elevation: 0,
                     ),
@@ -280,11 +281,12 @@ class _DocumentTab extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: () => onOpenChat(context),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: _vesperBorder, width: 1),
-                        foregroundColor: _vesperCyan,
+                        backgroundColor: _vesperSurface,
+                        side: const BorderSide(color: _vesperCyan, width: 1),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       icon: const Icon(Icons.chat_bubble_outline),
@@ -551,7 +553,15 @@ class _LinkTabState extends State<_LinkTab> {
                             }
                           } catch (_) {}
                         },
-                  style: FilledButton.styleFrom(backgroundColor: _vesperCyan, foregroundColor: _vesperBlack, elevation: 0),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _vesperSurface,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    side: const BorderSide(color: _vesperCyan, width: 1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   child: const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Process', style: TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700))),
                 ),
               ),
@@ -628,7 +638,7 @@ class _TextTab extends StatelessWidget {
                 const Text(
                   'Process Raw Text',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: _vesperCyan,
                     fontFamily: 'Roboto',
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
@@ -726,11 +736,14 @@ class _TextTab extends StatelessWidget {
                       ),
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: _vesperCyan,
-                      foregroundColor: _vesperBlack,
+                      backgroundColor: _vesperSurface,
+                      foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: _vesperCyan, width: 1),
+                      ),
                     ),
                   ),
                 ),

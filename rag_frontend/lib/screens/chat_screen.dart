@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
@@ -124,15 +126,15 @@ class _ChatScreenState extends State<ChatScreen> {
             content: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
+                color: const Color(0xFF2D2D34),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFF22C55E).withValues(alpha: 0.5),
-                  width: 1.2,
+                  color: const Color(0xFFFF5F1F),
+                  width: 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                    color: const Color(0xFFFF5F1F).withValues(alpha: 0.15),
                     blurRadius: 16,
                     spreadRadius: 1,
                   ),
@@ -148,12 +150,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+                      color: const Color(0xFFFF5F1F).withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.check_circle,
-                      color: Color(0xFF22C55E),
+                      color: Color(0xFFFF5F1F),
                       size: 22,
                     ),
                   ),
@@ -223,7 +225,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final usagePercent = status['groq_usage_percent'] as int? ?? 0;
-    
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = screenWidth < 600;
+
     Color statusColor;
     if (usagePercent < 70) {
       statusColor = const Color(0xFF22C55E); // Green
@@ -233,12 +237,50 @@ class _ChatScreenState extends State<ChatScreen> {
       statusColor = const Color(0xFFEF4444); // Red
     }
 
+    const double ringSize = 34;
+    final progress = (usagePercent.clamp(0, 100)) / 100.0;
+
+    final ringWithPercent = SizedBox(
+      width: ringSize,
+      height: ringSize,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: CircularProgressIndicator(
+                value: progress,
+                backgroundColor: statusColor.withValues(alpha: 0.2),
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                strokeWidth: 2.5,
+              ),
+            ),
+          ),
+          Text(
+            '$usagePercent%',
+            style: TextStyle(
+              color: const Color(0xFFE5E7EB),
+              fontSize: isMobile ? 8.5 : 9.5,
+              fontWeight: FontWeight.w700,
+              height: 1,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Tooltip(
         message: 'Groq API Usage: $usagePercent%',
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 6 : 10,
+            vertical: 6,
+          ),
           decoration: BoxDecoration(
             color: const Color(0xFF0A0A0A),
             borderRadius: BorderRadius.circular(16),
@@ -247,31 +289,24 @@ class _ChatScreenState extends State<ChatScreen> {
               width: 1,
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(
-                  value: usagePercent / 100,
-                  backgroundColor: statusColor.withValues(alpha: 0.2),
-                  valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                  strokeWidth: 2.5,
+          child: isMobile
+              ? ringWithPercent
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ringWithPercent,
+                    const SizedBox(width: 8),
+                    const Text(
+                      'API Health',
+                      style: TextStyle(
+                        color: Color(0xFFE5E7EB),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'API Health',
-                style: TextStyle(
-                  color: Color(0xFFE5E7EB),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -299,15 +334,15 @@ class _ChatScreenState extends State<ChatScreen> {
             content: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
+                color: const Color(0xFF2D2D34),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFFA78BFA).withValues(alpha: 0.5),
-                  width: 1.2,
+                  color: const Color(0xFFFF5F1F),
+                  width: 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFA78BFA).withValues(alpha: 0.15),
+                    color: const Color(0xFFFF5F1F).withValues(alpha: 0.15),
                     blurRadius: 16,
                     spreadRadius: 1,
                   ),
@@ -323,19 +358,19 @@ class _ChatScreenState extends State<ChatScreen> {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFA78BFA).withValues(alpha: 0.12),
+                      color: const Color(0xFFFF5F1F).withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.auto_awesome,
-                      color: Color(0xFFA78BFA),
+                      color: Color(0xFFFF5F1F),
                       size: 22,
                     ),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'Done! You can now ask questions about your document.',
+                      'Done! Text and Visuals/Graphs processed successfully. You can now ask questions.',
                       style: TextStyle(
                         color: Colors.white,
                         fontFamily: 'Roboto',
@@ -366,10 +401,20 @@ class _ChatScreenState extends State<ChatScreen> {
         final messages = chatProvider.messages;
         final reversedMessages = messages.reversed.toList();
         final colorScheme = Theme.of(context).colorScheme;
+        final isMobileSidebar = MediaQuery.sizeOf(context).width < 600;
 
         return Scaffold(
           drawer: const HistorySidebar(),
           appBar: AppBar(
+            leading: isMobileSidebar
+                ? Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                      tooltip: 'History',
+                    ),
+                  )
+                : null,
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -377,7 +422,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   chatProvider.isMultiDocMode
                       ? Icons.layers_outlined
                       : Icons.memory_outlined,
-                  color: const Color(0xFFA78BFA),
+                  color: const Color(0xFFFF5F1F),
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -388,7 +433,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         : chatProvider.filename ?? 'VESPER CHAT',
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFFA78BFA),
+                      color: const Color(0xFFFF5F1F),
                       letterSpacing: 1.1,
                       fontWeight: FontWeight.w700,
                     ),
@@ -400,54 +445,21 @@ class _ChatScreenState extends State<ChatScreen> {
               preferredSize: const Size.fromHeight(1),
               child: Container(
                 height: 1,
-                color: const Color(0xFFA78BFA).withValues(alpha: 0.24),
+                color: const Color(0xFFFF5F1F).withValues(alpha: 0.24),
               ),
             ),
             actions: [
               _buildApiStatusChip(chatProvider),
-              if (chatProvider.structuredSummary != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: OutlinedButton.icon(
-                    onPressed: chatProvider.isLoading
-                        ? null
-                        : () => _downloadSummary(chatProvider),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0A0A0A),
-                      foregroundColor: const Color(0xFFA78BFA),
-                      side: const BorderSide(
-                        color: Color(0xFF27272A),
-                        width: 1,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: const Icon(Icons.download_outlined, size: 18),
-                    label: const Text(
-                      'Download Summary',
-                      style: TextStyle(
-                        fontFamily: 'Roboto',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: OutlinedButton.icon(
+                child: ElevatedButton.icon(
                   onPressed: chatProvider.isLoading
                       ? null
                       : () => _requestSummary(chatProvider),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0A0A0A),
-                    foregroundColor: const Color(0xFFA78BFA),
-                    side: const BorderSide(color: Color(0xFF27272A), width: 1),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF5F1F),
+                    foregroundColor: Colors.white,
+                    elevation: 2,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 12,
@@ -469,14 +481,14 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: OutlinedButton.icon(
+                child: ElevatedButton.icon(
                   onPressed: chatProvider.isLoading
                       ? null
                       : () => _uploadFile(chatProvider),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0A0A0A),
-                    foregroundColor: const Color(0xFFA78BFA),
-                    side: const BorderSide(color: Color(0xFF27272A), width: 1),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF5F1F),
+                    foregroundColor: Colors.white,
+                    elevation: 2,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 12,
@@ -485,9 +497,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  icon: const Icon(Icons.upload_file_outlined, size: 18),
+                  icon: const Icon(Icons.cloud_upload_outlined, size: 18),
                   label: const Text(
-                    'Upload PDF',
+                    'Upload File',
                     style: TextStyle(
                       fontFamily: 'Roboto',
                       fontWeight: FontWeight.w600,
@@ -541,7 +553,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           const SpinKitPulse(
-                                            color: Color(0xFFA78BFA),
+                                            color: Color(0xFFFF5F1F),
                                             size: 24.0,
                                           ),
                                           const SizedBox(width: 12),
@@ -551,7 +563,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                                 ? 'Generating Summary...'
                                                 : 'Thinking...',
                                             style: const TextStyle(
-                                              color: Color(0xFFA78BFA),
+                                              color: Color(0xFFFF5F1F),
                                             ),
                                           ),
                                         ],
@@ -581,23 +593,21 @@ class _ChatScreenState extends State<ChatScreen> {
                                     : adjustedIndex;
 
                             final message = reversedMessages[messageIndex];
-                            final followUpsRaw = message['follow_ups'];
-                            final followUps = followUpsRaw is List ? followUpsRaw.whereType<String>().toList() : <String>[];
+                            final followUps = message.followUps ?? <String>[];
 
                             return Column(
-                              crossAxisAlignment: message['role'] == 'user' ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                              crossAxisAlignment: message.role == 'user' ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                               children: [
                                 ChatBubble(
-                                  text: message['text']?.toString() ?? '',
-                                  isUser: message['role'] == 'user',
-                                  animate: messageIndex == 0,
-                                  sources: message['sources']?.toString(),
-                                  // We handle follow up display below instead of inside the bubble 
-                                  // to match instructions: "Directly beneath the Vesper Core response bubble"
-                                  // followUps: followUps, 
-                                  // onFollowUpTap: ..., 
+                                  message: message,
+                                  text: message.text,
+                                  isUser: message.role == 'user',
+                                  animate: messageIndex == 0 && message.role != 'user',
+                                  sources: message.sources,
+                                  onAssistantAnimationFinished: (m) =>
+                                      chatProvider.markMessageAnimationFinished(m),
                                 ),
-                                if (message['role'] != 'user' && followUps.isNotEmpty && messageIndex == 0)
+                                if (message.role != 'user' && followUps.isNotEmpty && messageIndex == 0)
                                   Padding(
                                     padding: const EdgeInsets.only(left: 12.0, bottom: 8.0, top: 4.0),
                                     child: SingleChildScrollView(
@@ -609,7 +619,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             label: Text(
                                               q,
                                               style: const TextStyle(
-                                                color: Color(0xFFA78BFA),
+                                                color:  Color(0xFFFF5F1F),
                                                 fontWeight: FontWeight.w500,
                                                 fontSize: 12,
                                               ),
@@ -617,7 +627,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             backgroundColor: Colors.transparent,
                                             shape: StadiumBorder(
                                               side: BorderSide(
-                                                color: const Color(0xFFA78BFA).withValues(alpha: 0.3),
+                                                color: const Color(0xFFFF5F1F).withValues(alpha: 0.3),
                                               ),
                                             ),
                                             onPressed: () {
@@ -639,93 +649,121 @@ class _ChatScreenState extends State<ChatScreen> {
                             );
                           },
                         )
-                      : Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Container(
-                              constraints: const BoxConstraints(maxWidth: 480),
-                              padding: const EdgeInsets.all(22),
-                              decoration: BoxDecoration(
-                                color: const Color(0x6610161D),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: const Color(
-                                    0xFFA78BFA,
-                                  ).withValues(alpha: 0.4),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFFA78BFA,
-                                    ).withValues(alpha: 0.15),
-                                    blurRadius: 24,
-                                    spreadRadius: 0.6,
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final w = MediaQuery.sizeOf(context).width;
+                            final isMobile = w < 600;
+                            final outerPad = isMobile ? 12.0 : 24.0;
+                            final innerPad = isMobile ? 16.0 : 22.0;
+                            final iconSize = isMobile ? 48.0 : 64.0;
+                            final titleStyle = Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      color: const Color(0xFFFF5F1F),
+                                      letterSpacing: isMobile ? 0.4 : 0.8,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: isMobile ? 16 : null,
+                                    ) ??
+                                const TextStyle(
+                                  color:  Color(0xFFFF5F1F),
+                                  fontWeight: FontWeight.w700,
+                                );
+                            final bodyStyle = Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: isMobile ? 13 : null,
+                                  height: 1.35,
+                                );
+                            final hintStyle = Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: colorScheme.onSurface
+                                      .withValues(alpha: 0.7),
+                                  fontSize: isMobile ? 11.5 : null,
+                                );
+
+                            return Center(
+                              child: SingleChildScrollView(
+                                padding: EdgeInsets.all(outerPad),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: isMobile ? w - outerPad * 2 : 480,
                                   ),
-                                ],
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.radar_rounded,
-                                    size: 64,
-                                    color: Color(0xFFA78BFA),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Text(
-                                    'No Active Document Session',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          color: const Color(0xFFA78BFA),
-                                          letterSpacing: 0.8,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  SizedBox(
-                                    height: 22,
-                                    child: DefaultTextStyle(
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium!
-                                          .copyWith(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.85,
-                                            ),
-                                          ),
-                                      child: AnimatedTextKit(
-                                        repeatForever: true,
-                                        pause: const Duration(
-                                          milliseconds: 900,
-                                        ),
-                                        animatedTexts: [
-                                          FadeAnimatedText(
-                                            'Upload a PDF to initialize chat context',
-                                          ),
-                                          FadeAnimatedText(
-                                            'Then ask targeted questions from your files',
-                                          ),
-                                        ],
+                                  child: Container(
+                                    padding: EdgeInsets.all(innerPad),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0x6610161D),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: const Color(
+                                          0xFFFF5F1F,
+                                        ).withValues(alpha: 0.4),
                                       ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(
+                                            0xFFFF5F1F,
+                                          ).withValues(alpha: 0.15),
+                                          blurRadius: isMobile ? 16 : 24,
+                                          spreadRadius: 0.6,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.radar_rounded,
+                                          size: iconSize,
+                                          color: const Color(0xFFFF5F1F),
+                                        ),
+                                        SizedBox(height: isMobile ? 10 : 14),
+                                        Text(
+                                          'No Active Document Session',
+                                          textAlign: TextAlign.center,
+                                          style: titleStyle,
+                                        ),
+                                        SizedBox(height: isMobile ? 8 : 10),
+                                        DefaultTextStyle(
+                                          style: bodyStyle ??
+                                              const TextStyle(
+                                                color: Colors.white,
+                                              ),
+                                          textAlign: TextAlign.center,
+                                          child: AnimatedTextKit(
+                                            repeatForever: true,
+                                            pause: const Duration(
+                                              milliseconds: 900,
+                                            ),
+                                            animatedTexts: [
+                                              FadeAnimatedText(
+                                                'Upload a PDF to initialize chat context',
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              FadeAnimatedText(
+                                                'Then ask targeted questions from your files',
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        SizedBox(height: isMobile ? 6 : 8),
+                                        Text(
+                                          'Use the upload control in the top-right corner.',
+                                          textAlign: TextAlign.center,
+                                          style: hintStyle,
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Use the upload control in the top-right corner.',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: colorScheme.onSurface
-                                              .withValues(alpha: 0.7),
-                                        ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                 ),
                 // --- Input area ---
@@ -741,9 +779,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         color: chatProvider.isRecording
                             ? const Color(0xFFEF4444)
                             : _inputFocusNode.hasFocus
-                                ? const Color(0xFFA78BFA)
-                                : const Color(0xFFA78BFA)
-                                    .withValues(alpha: 0.34),
+                                ? const Color(0xFFFF5F1F)
+                                : Colors.white24,
                         width: (_inputFocusNode.hasFocus ||
                                 chatProvider.isRecording)
                             ? 1.6
@@ -753,7 +790,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         if (_inputFocusNode.hasFocus)
                           BoxShadow(
                             color: const Color(
-                              0xFFA78BFA,
+                              0xFFFF5F1F,
                             ).withValues(alpha: 0.28),
                             blurRadius: 18,
                             spreadRadius: 0.6,
@@ -817,24 +854,60 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ],
                                   )
                                 // ---- Normal TextField ----
-                                : TextField(
-                                    key: const ValueKey('text_field'),
-                                    focusNode: _inputFocusNode,
-                                    controller: _messageController,
-                                    textInputAction: TextInputAction.send,
-                                    onSubmitted: chatProvider.isLoading
-                                        ? null
-                                        : (_) =>
-                                            _sendMessage(chatProvider),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                    ),
-                                    decoration: const InputDecoration(
-                                      hintText:
-                                          'Ask a question about your PDF...',
-                                      filled: true,
-                                      fillColor: Color(0x66161A20),
-                                    ),
+                                : Row(
+                                    key: const ValueKey('text_field_row'),
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      if (chatProvider.isProcessingVoice) ...[
+                                        const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.2,
+                                            color: Color(0xFFFF5F1F),
+                                            backgroundColor: Color(0xFF27272A),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                      ],
+                                      Expanded(
+                                        child: TextField(
+                                          key: const ValueKey('text_field'),
+                                          focusNode: _inputFocusNode,
+                                          controller: _messageController,
+                                          textInputAction: TextInputAction.send,
+                                          enabled: !chatProvider.isLoading &&
+                                              !chatProvider.isProcessingVoice,
+                                          onSubmitted: chatProvider.isLoading
+                                              ? null
+                                              : (_) =>
+                                                  _sendMessage(chatProvider),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                          ),
+                                          decoration: InputDecoration(
+                                            hintText: chatProvider
+                                                    .isProcessingVoice
+                                                ? 'Sending voice…'
+                                                : 'Ask a question about your PDF...',
+                                            filled: true,
+                                            fillColor: const Color(0xFF2D2D34),
+                                            border: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                              borderSide: const BorderSide(color: Colors.white24),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                              borderSide: const BorderSide(color: Colors.white24),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                              borderSide: const BorderSide(color: Color(0xFFFF5F1F)),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                           ),
                         ),
@@ -847,7 +920,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFA78BFA)
+                                      color: const Color(0xFFFF5F1F)
                                           .withValues(alpha: 0.34),
                                       blurRadius: 16,
                                     ),
@@ -861,14 +934,14 @@ class _ChatScreenState extends State<ChatScreen> {
                                   style: FilledButton.styleFrom(
                                     padding: const EdgeInsets.all(14),
                                     backgroundColor:
-                                        const Color(0xFFA78BFA),
+                                        const Color(0xFFFF5F1F),
                                     foregroundColor:
-                                        const Color(0xFF001314),
+                                        Colors.white,
                                     shape: const CircleBorder(),
                                   ),
                                   child: chatProvider.isLoading
                                       ? const SpinKitPulse(
-                                          color: Color(0xFF001314),
+                                          color: Colors.white,
                                           size: 18.0,
                                         )
                                       : const Icon(
@@ -878,78 +951,87 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                               )
                             // --- Mic (hold-to-record) button ---
-                            : GestureDetector(
-                                onTap: () {
-                                  ScaffoldMessenger.of(context)
-                                    ..hideCurrentSnackBar()
-                                    ..showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Hold the mic button to record a voice question',
-                                        ),
-                                        behavior:
-                                            SnackBarBehavior.floating,
-                                        duration:
-                                            Duration(seconds: 2),
-                                      ),
+                            : AbsorbPointer(
+                                absorbing: chatProvider.isProcessingVoice ||
+                                    chatProvider.isLoading,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    if (chatProvider.isProcessingVoice) {
+                                      return;
+                                    }
+                                    CustomSnackBar.showInfo(
+                                      context,
+                                      'Hold the mic button to record a voice question',
                                     );
-                                },
-                                onLongPress: () =>
-                                    chatProvider.startRecording(),
-                                onLongPressEnd: (_) =>
-                                    chatProvider
-                                        .stopRecordingAndSend(),
-                                onLongPressMoveUpdate: (details) {
-                                  // Slide left to cancel (WhatsApp-style)
-                                  if (details.localOffsetFromOrigin.dx <
-                                      -80) {
+                                  },
+                                  onLongPress: chatProvider.isProcessingVoice
+                                      ? null
+                                      : () => chatProvider.startRecording(),
+                                  onLongPressEnd: (_) {
+                                    if (chatProvider.isProcessingVoice) {
+                                      return;
+                                    }
+                                    chatProvider.stopRecordingAndSend();
+                                  },
+                                  onLongPressMoveUpdate: (details) {
+                                    if (chatProvider.isProcessingVoice) {
+                                      return;
+                                    }
+                                    if (details.localOffsetFromOrigin.dx <
+                                        -80) {
+                                      chatProvider.cancelRecording();
+                                    }
+                                  },
+                                  onLongPressCancel: () {
+                                    if (chatProvider.isProcessingVoice) {
+                                      return;
+                                    }
                                     chatProvider.cancelRecording();
-                                  }
-                                },
-                                onLongPressCancel: () =>
-                                    chatProvider.cancelRecording(),
-                                child: AnimatedContainer(
-                                  duration: const Duration(
-                                    milliseconds: 200,
-                                  ),
-                                  padding: EdgeInsets.all(
-                                    chatProvider.isRecording
-                                        ? 18
-                                        : 14,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: chatProvider.isRecording
-                                        ? const Color(0xFFEF4444)
-                                        : const Color(0xFFA78BFA),
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
+                                  },
+                                  child: _PulsingMicShell(
+                                    active: chatProvider.isRecording,
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      padding: EdgeInsets.all(
+                                        chatProvider.isRecording
+                                            ? 18
+                                            : 14,
+                                      ),
+                                      decoration: BoxDecoration(
                                         color: chatProvider.isRecording
                                             ? const Color(0xFFEF4444)
-                                                .withValues(
-                                                  alpha: 0.5,
-                                                )
-                                            : const Color(0xFFA78BFA)
-                                                .withValues(
-                                                  alpha: 0.34,
+                                            : const Color(0xFFFF5F1F),
+                                        shape: BoxShape.circle,
+                                        boxShadow: chatProvider.isRecording
+                                            ? const <BoxShadow>[]
+                                            : [
+                                                BoxShadow(
+                                                  color: const Color(0xFFFF5F1F)
+                                                      .withValues(alpha: 0.34),
+                                                  blurRadius: 16,
                                                 ),
-                                        blurRadius:
-                                            chatProvider.isRecording
-                                                ? 24
-                                                : 16,
+                                              ],
                                       ),
-                                    ],
+                                      child: chatProvider.isProcessingVoice
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                                backgroundColor:
+                                                    Color(0x33FFFFFF),
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.mic_rounded,
+                                              color: Colors.white,
+                                              size: 18,
+                                            ),
+                                    ),
                                   ),
-                                  child: chatProvider.isRecording
-                                      ? const SpinKitPulse(
-                                          color: Color(0xFF001314),
-                                          size: 20.0,
-                                        )
-                                      : const Icon(
-                                          Icons.mic_rounded,
-                                          color: Color(0xFF001314),
-                                          size: 18,
-                                        ),
                                 ),
                               ),
                       ],
@@ -969,9 +1051,9 @@ class _ChatScreenState extends State<ChatScreen> {
   // -------------------------------------------------------
 
   Widget _buildInteractiveSummary(Map<String, dynamic> summaryData) {
-    const vesperCyan = Color(0xFFA78BFA);
-    const cardBg = Color(0xFF1A1A1A);
-    const borderColor = Color(0xFF2A2A2E);
+    const neonOrange = Color(0xFFFF5F1F);
+    const cardBg = Color(0xFF2D2D34);
+    const borderColor = Color(0xFF3F3F46);
 
     final sections = <_SummarySection>[
       _SummarySection(
@@ -1004,12 +1086,12 @@ class _ChatScreenState extends State<ChatScreen> {
           color: cardBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: vesperCyan.withValues(alpha: 0.35),
+            color: neonOrange.withValues(alpha: 0.35),
           ),
           boxShadow: [
             BoxShadow(
-              color: vesperCyan.withValues(alpha: 0.1),
-              blurRadius: 20,
+              color: neonOrange.withValues(alpha: 0.2),
+              blurRadius: 10,
               spreadRadius: 0.5,
             ),
           ],
@@ -1025,26 +1107,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 vertical: 14,
               ),
               decoration: BoxDecoration(
-                color: vesperCyan.withValues(alpha: 0.08),
+                color: neonOrange.withValues(alpha: 0.08),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
                 ),
                 border: Border(
                   bottom: BorderSide(
-                    color: vesperCyan.withValues(alpha: 0.2),
+                    color: neonOrange.withValues(alpha: 0.2),
                   ),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.auto_awesome, color: vesperCyan, size: 20),
+                  const Icon(Icons.auto_awesome, color: neonOrange, size: 20),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
                       'INTERACTIVE SUMMARY DASHBOARD',
                       style: TextStyle(
-                        color: vesperCyan,
+                        color: neonOrange,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                         letterSpacing: 1.2,
@@ -1052,7 +1134,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: vesperCyan, size: 20),
+                    icon: const Icon(Icons.close, color: Colors.white54, size: 20),
                     tooltip: 'Dismiss summary',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -1083,8 +1165,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     14,
                   ),
                   collapsedIconColor:
-                      vesperCyan.withValues(alpha: 0.6),
-                  iconColor: vesperCyan,
+                      neonOrange.withValues(alpha: 0.6),
+                  iconColor: neonOrange,
                   shape: Border(
                     bottom: BorderSide(
                       color: borderColor.withValues(alpha: 0.5),
@@ -1097,13 +1179,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   leading: Icon(
                     section.icon,
-                    color: vesperCyan,
+                    color: neonOrange,
                     size: 20,
                   ),
                   title: Text(
                     section.title,
                     style: const TextStyle(
-                      color: vesperCyan,
+                      color: neonOrange,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                       letterSpacing: 0.5,
@@ -1139,7 +1221,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   width: 6,
                                   height: 6,
                                   decoration: BoxDecoration(
-                                    color: vesperCyan
+                                    color: neonOrange
                                         .withValues(alpha: 0.7),
                                     shape: BoxShape.circle,
                                   ),
@@ -1164,6 +1246,27 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               );
             }),
+            // Download Button at the bottom
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: ElevatedButton.icon(
+                  onPressed: () => _downloadSummary(context.read<ChatProvider>()),
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Download PDF/Markdown'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: neonOrange,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(200, 48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 4,
+                    shadowColor: neonOrange.withValues(alpha: 0.4),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1193,6 +1296,88 @@ class _SummarySection {
   final String? content;
   final List<String>? items;
   final bool isExpandedByDefault;
+}
+
+/// Pulsing scale + glow while recording (replaces static mic feedback).
+class _PulsingMicShell extends StatefulWidget {
+  const _PulsingMicShell({
+    required this.active,
+    required this.child,
+  });
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_PulsingMicShell> createState() => _PulsingMicShellState();
+}
+
+class _PulsingMicShellState extends State<_PulsingMicShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    );
+    if (widget.active) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PulsingMicShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _controller.repeat(reverse: true);
+    } else if (!widget.active && oldWidget.active) {
+      _controller
+        ..stop()
+        ..reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.active) {
+      return widget.child;
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final pulse = math.sin(_controller.value * math.pi);
+        final scale = 1.0 + 0.09 * pulse;
+        return Transform.scale(
+          scale: scale,
+          alignment: Alignment.center,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFEF4444)
+                      .withValues(alpha: 0.22 + 0.38 * pulse),
+                  blurRadius: 12 + 22 * pulse,
+                  spreadRadius: 0.5 + 1.4 * pulse,
+                ),
+              ],
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
+    );
+  }
 }
 
 /// Animated blinking red dot for the recording indicator.

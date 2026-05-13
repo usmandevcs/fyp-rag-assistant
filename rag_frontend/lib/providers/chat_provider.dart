@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/chat_message.dart';
 import '../services/api_service.dart';
 
 enum LoadingType { none, document, link, text, chat, voice, summary }
@@ -20,7 +21,7 @@ class ChatProvider extends ChangeNotifier {
 
   final ApiService _apiService;
 
-  final List<Map<String, dynamic>> _messages = <Map<String, dynamic>>[];
+  final List<ChatMessage> _messages = <ChatMessage>[];
   final List<Map<String, dynamic>> _pastSessions = <Map<String, dynamic>>[];
   bool _isLoading = false;
   LoadingType _loadingType = LoadingType.none;
@@ -39,22 +40,25 @@ class ChatProvider extends ChangeNotifier {
   final AudioRecorder _recorder = AudioRecorder();
   final FlutterTts _tts = FlutterTts();
   bool _isRecording = false;
+  bool _isProcessingVoice = false;
   bool _ttsInitialized = false;
   String? _currentRecordingPath;
 
   // --- Multi-document chat state ---
   final List<String> _selectedSessionIds = <String>[];
+  final List<String> _pinnedMessages = <String>[];
 
-  List<Map<String, dynamic>> get messages =>
-      List<Map<String, dynamic>>.unmodifiable(_messages);
+  List<ChatMessage> get messages => List<ChatMessage>.unmodifiable(_messages);
   bool get isLoading => _isLoading;
   LoadingType get loadingType => _loadingType;
   String? get sessionId => _sessionId;
   String? get filename => _filename;
   String? get errorMessage => _errorMessage;
   bool get isRecording => _isRecording;
+  bool get isProcessingVoice => _isProcessingVoice;
   List<String> get selectedSessionIds =>
       List<String>.unmodifiable(_selectedSessionIds);
+  List<String> get pinnedMessages => List<String>.unmodifiable(_pinnedMessages);
   bool get isMultiDocMode => _selectedSessionIds.length > 1;
   Map<String, dynamic>? get structuredSummary => _structuredSummary;
   bool get showReadyPopup => _showReadyPopup;
@@ -88,6 +92,21 @@ class ChatProvider extends ChangeNotifier {
   /// Clear all multi-doc selections.
   void clearSessionSelection() {
     _selectedSessionIds.clear();
+    notifyListeners();
+  }
+
+  void togglePinMessage(String message) {
+    if (_pinnedMessages.contains(message)) {
+      _pinnedMessages.remove(message);
+    } else {
+      _pinnedMessages.add(message);
+    }
+    notifyListeners();
+  }
+
+  /// Lock the assistant bubble to static markdown after the typewriter finishes.
+  void markMessageAnimationFinished(ChatMessage message) {
+    message.isAnimationFinished = true;
     notifyListeners();
   }
 
@@ -183,21 +202,28 @@ class ChatProvider extends ChangeNotifier {
   Future<void> stopRecordingAndSend() async {
     if (!_isRecording) return;
 
+    String? path;
     try {
-      final path = await _recorder.stop();
+      path = await _recorder.stop();
+    } catch (error) {
       _isRecording = false;
+      _errorMessage = 'Failed to stop recording: $error';
       notifyListeners();
+      return;
+    }
 
+    _isRecording = false;
+    notifyListeners();
+
+    try {
       if (path == null || path.isEmpty) {
         _errorMessage = 'Recording failed — no audio captured.';
         notifyListeners();
         return;
       }
-
       await _sendVoiceFile(path);
     } catch (error) {
-      _isRecording = false;
-      _errorMessage = 'Recording error: $error';
+      _errorMessage = _formatError(error);
       notifyListeners();
     }
   }
@@ -208,13 +234,17 @@ class ChatProvider extends ChangeNotifier {
       final path = await _recorder.stop();
       _isRecording = false;
       notifyListeners();
-      // Clean up the file
       if (path != null && path.isNotEmpty) {
-        final file = File(path);
-        if (await file.exists()) await file.delete();
+        try {
+          final file = File(path);
+          if (await file.exists()) await file.delete();
+        } catch (e) {
+          debugPrint('Voice cancel: failed to delete temp file: $e');
+        }
       }
-    } catch (_) {
+    } catch (error) {
       _isRecording = false;
+      _errorMessage = 'Failed to cancel recording: $error';
       notifyListeners();
     }
   }
@@ -226,13 +256,14 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
-    _setLoading(true, type: LoadingType.voice);
+    _isProcessingVoice = true;
     _errorMessage = null;
+    notifyListeners();
 
     try {
       final file = File(filePath);
       final audioBytes = await file.readAsBytes();
-      final fileName = filePath.split('/').last;
+      final fileName = filePath.split(RegExp(r'[\\/]')).last;
 
       final result = await _apiService.sendVoiceMessage(
         sessionId: _sessionId!,
@@ -245,31 +276,33 @@ class ChatProvider extends ChangeNotifier {
       final sources = result['sources'] as List<String>;
       final sourcesText = sources.isNotEmpty ? sources.join(', ') : '';
 
-      // Add the transcribed question as a user message
-      _messages.add(<String, dynamic>{
-        'role': 'user',
-        'text': '🎤 $question',
-      });
+      _messages.add(ChatMessage(role: 'user', text: '🎤 $question'));
 
-      // Add the assistant's answer
-      _messages.add(<String, dynamic>{
-        'role': 'assistant',
-        'text': answer,
-        if (sourcesText.isNotEmpty) 'sources': sourcesText,
-      });
+      _messages.add(
+        ChatMessage(
+          role: 'assistant',
+          text: answer,
+          sources: sourcesText.isNotEmpty ? sourcesText : null,
+        ),
+      );
 
-      // Read the answer aloud
-      await _speakText(answer);
+      try {
+        await _speakText(answer);
+      } catch (e) {
+        debugPrint('TTS after voice response: $e');
+      }
     } catch (error) {
       _errorMessage = _formatError(error);
     } finally {
-      _setLoading(false);
+      _isProcessingVoice = false;
+      notifyListeners();
       fetchApiStatus();
-      // Clean up temp audio file
       try {
         final file = File(filePath);
         if (await file.exists()) await file.delete();
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Voice temp file cleanup: $e');
+      }
     }
   }
 
@@ -314,13 +347,16 @@ class ChatProvider extends ChangeNotifier {
           final answer = item['answer'];
 
           if (question is String) {
-            _messages.add(<String, dynamic>{'role': 'user', 'text': question});
+            _messages.add(ChatMessage(role: 'user', text: question));
           }
           if (answer is String) {
-            _messages.add(<String, dynamic>{
-              'role': 'assistant',
-              'text': answer,
-            });
+            _messages.add(
+              ChatMessage(
+                role: 'assistant',
+                text: answer,
+                isAnimationFinished: true,
+              ),
+            );
           }
         }
       }
@@ -444,7 +480,7 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
-    _messages.add(<String, dynamic>{'role': 'user', 'text': trimmedText});
+    _messages.add(ChatMessage(role: 'user', text: trimmedText));
     _setLoading(true, type: LoadingType.chat);
     _errorMessage = null;
 
@@ -456,12 +492,14 @@ class ChatProvider extends ChangeNotifier {
         result = await _apiService.askMultiQuestion(
           sessionIds: _selectedSessionIds,
           question: trimmedText,
+          pinnedMessages: _pinnedMessages,
         );
       } else {
         // Single-document flow (unchanged)
         result = await _apiService.askQuestion(
           sessionId: _sessionId!,
           question: trimmedText,
+          pinnedMessages: _pinnedMessages,
         );
       }
 
@@ -469,13 +507,17 @@ class ChatProvider extends ChangeNotifier {
       final sources = result['sources'] as List<String>;
       final sourcesText = sources.isNotEmpty ? sources.join(', ') : '';
       final followUps = result['follow_ups'] as List<String>? ?? <String>[];
+      final chartData = result['chart_data'] as List<dynamic>?;
 
-      _messages.add(<String, dynamic>{
-        'role': 'assistant',
-        'text': answer,
-        if (sourcesText.isNotEmpty) 'sources': sourcesText,
-        if (followUps.isNotEmpty) 'follow_ups': followUps,
-      });
+      _messages.add(
+        ChatMessage(
+          role: 'assistant',
+          text: answer,
+          sources: sourcesText.isNotEmpty ? sourcesText : null,
+          followUps: followUps.isNotEmpty ? List<String>.from(followUps) : null,
+          chartData: chartData,
+        ),
+      );
       if (isSummaryRequest) {
         generatedSummaryText = answer;
       }

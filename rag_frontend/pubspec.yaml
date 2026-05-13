@@ -59,6 +59,11 @@ dependencies:
   # iOS: No additional permissions required (TTS is built-in)
   # Android: No additional permissions required (TTS is built-in)
   flutter_tts: ^4.2.5
+  
+  # flutter_markdown: Markdown rendering for displaying formatted text and tables
+  flutter_markdown: ^0.7.4
+  
+  fl_chart: ^0.68.0
 
 dev_dependencies:
   flutter_test:

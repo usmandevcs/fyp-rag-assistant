@@ -6,7 +6,7 @@ class ApiService {
   ApiService({http.Client? client}) : _client = client ?? http.Client();
 
   static const String baseUrl = 'http://127.0.0.1:8000';
-  
+
   // static const String baseUrl = 'http://192.168.160.1:8000'; // ye method ky liye use karny ky to use in mobile device
 
   final http.Client _client;
@@ -59,6 +59,7 @@ class ApiService {
   Future<Map<String, dynamic>> askQuestion({
     required String sessionId,
     required String question,
+    List<String>? pinnedMessages,
   }) async {
     try {
       final response = await _client.post(
@@ -70,6 +71,7 @@ class ApiService {
         body: jsonEncode(<String, dynamic>{
           'session_id': sessionId,
           'question': question,
+          'pinned_messages': pinnedMessages ?? <String>[],
         }),
       );
 
@@ -101,10 +103,15 @@ class ApiService {
           ? rawFollowUps.whereType<String>().toList()
           : <String>[];
 
+      // Parse chart data
+      final rawChartData = decoded['chart_data'];
+      final chartData = rawChartData is List ? rawChartData : <dynamic>[];
+
       return <String, dynamic>{
         'answer': answer,
         'sources': sources,
         'follow_ups': followUps,
+        'chart_data': chartData,
       };
     } on ApiException {
       rethrow;
@@ -117,6 +124,7 @@ class ApiService {
   Future<Map<String, dynamic>> askMultiQuestion({
     required List<String> sessionIds,
     required String question,
+    List<String>? pinnedMessages,
   }) async {
     try {
       final response = await _client.post(
@@ -128,6 +136,7 @@ class ApiService {
         body: jsonEncode(<String, dynamic>{
           'session_ids': sessionIds,
           'question': question,
+          'pinned_messages': pinnedMessages ?? <String>[],
         }),
       );
 
@@ -161,10 +170,14 @@ class ApiService {
           ? rawFollowUps.whereType<String>().toList()
           : <String>[];
 
+      final rawChartData = decoded['chart_data'];
+      final chartData = rawChartData is List ? rawChartData : <dynamic>[];
+
       return <String, dynamic>{
         'answer': answer,
         'sources': sources,
         'follow_ups': followUps,
+        'chart_data': chartData,
       };
     } on ApiException {
       rethrow;
@@ -370,10 +383,14 @@ class ApiService {
           ? rawSources.whereType<String>().toList()
           : <String>[];
 
+      final rawChartData = decoded['chart_data'];
+      final chartData = rawChartData is List ? rawChartData : <dynamic>[];
+
       return <String, dynamic>{
         'question': question,
         'answer': answer,
         'sources': sources,
+        'chart_data': chartData,
       };
     } on ApiException {
       rethrow;

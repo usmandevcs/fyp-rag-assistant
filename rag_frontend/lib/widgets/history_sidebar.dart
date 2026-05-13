@@ -14,44 +14,40 @@ class HistorySidebar extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Drawer(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: const Color(0xFF2D2D34),
       child: Consumer<ChatProvider>(
         builder: (context, chatProvider, _) {
           final sessionId = chatProvider.sessionId;
 
           return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [const Color(0xFF121212), const Color(0xFF0D0D0D)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+            decoration: const BoxDecoration(
+              color: Color(0xFF2D2D34),
             ),
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
                 DrawerHeader(
-                  decoration: BoxDecoration(
-                    color: const Color(0x66111111),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1A1A1D),
                     border: Border(
                       bottom: BorderSide(
-                        color: const Color(0xFFA78BFA).withValues(alpha: 0.35),
+                        color: Colors.white12,
                       ),
                     ),
                   ),
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0x33161A1F),
+                      color: const Color(0xFF2D2D34),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: const Color(0xFFA78BFA).withValues(alpha: 0.6),
+                        color: const Color(0xFFFF5F1F).withValues(alpha: 0.4),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFA78BFA).withValues(alpha: 0.22),
-                          blurRadius: 14,
-                          spreadRadius: 0.8,
+                          color: const Color(0xFFFF5F1F).withValues(alpha: 0.1),
+                          blurRadius: 10,
+                          spreadRadius: 0.5,
                         ),
                       ],
                     ),
@@ -62,7 +58,7 @@ class HistorySidebar extends StatelessWidget {
                         children: [
                           Icon(
                             Icons.memory,
-                            color: const Color(0xFFA78BFA),
+                            color: const Color(0xFFFF5F1F),
                             size: 30,
                           ),
                           const SizedBox(width: 10),
@@ -74,7 +70,7 @@ class HistorySidebar extends StatelessWidget {
                                 Text(
                                   'VESPER CORE',
                                   style: GoogleFonts.shareTechMono(
-                                    color: const Color(0xFFA78BFA),
+                                    color: const Color(0xFFFF5F1F),
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.1,
@@ -103,17 +99,17 @@ class HistorySidebar extends StatelessWidget {
                     vertical: 4,
                   ),
                   child: ListTile(
-                    tileColor: const Color(0x33222A31),
-                    hoverColor: const Color(0xFFA78BFA).withValues(alpha: 0.12),
+                    tileColor: const Color(0xFF1A1A1D),
+                    hoverColor: const Color(0xFFFF5F1F).withValues(alpha: 0.1),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                       side: BorderSide(
-                        color: const Color(0xFFA78BFA).withValues(alpha: 0.22),
+                        color: const Color(0xFFFF5F1F).withValues(alpha: 0.3),
                       ),
                     ),
-                    leading: Icon(
+                    leading: const Icon(
                       Icons.add_circle_outline,
-                      color: const Color(0xFFA78BFA),
+                      color: Color(0xFFFF5F1F),
                     ),
                     title: Text(
                       'New Chat',
@@ -146,14 +142,14 @@ class HistorySidebar extends StatelessWidget {
                     ),
                     child: ListTile(
                       enabled: false,
-                      tileColor: const Color(0x26222A31),
+                      tileColor: const Color(0xFF1A1A1D),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: colorScheme.outlineVariant),
+                        side: BorderSide(color: const Color(0xFFFF5F1F).withValues(alpha: 0.3)),
                       ),
                       leading: const Icon(
                         Icons.hub_outlined,
-                        color: Color(0xFFA78BFA),
+                        color: Color(0xFFFF5F1F),
                       ),
                       title: Text(
                         'Current Document',
@@ -183,7 +179,7 @@ class HistorySidebar extends StatelessWidget {
                   child: Text(
                     'PAST DOCUMENTS',
                     style: GoogleFonts.shareTechMono(
-                      color: const Color(0xFFA78BFA),
+                      color: const Color(0xFFFF5F1F),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.8,
@@ -216,31 +212,25 @@ class HistorySidebar extends StatelessWidget {
                         vertical: 4,
                       ),
                       child: ListTile(
-                        tileColor: isSelected
-                            ? const Color(0xFFA78BFA).withValues(alpha: 0.18)
-                            : isCurrent
-                                ? const Color(0xFFA78BFA)
-                                    .withValues(alpha: 0.12)
-                                : const Color(0x1A222A31),
+                        tileColor: isCurrent || isSelected
+                            ? const Color(0xFFFF5F1F).withValues(alpha: 0.1)
+                            : const Color(0xFF1A1A1D),
                         hoverColor:
-                            const Color(0xFFA78BFA).withValues(alpha: 0.1),
+                            const Color(0xFFFF5F1F).withValues(alpha: 0.05),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                           side: BorderSide(
-                            color: isSelected
-                                ? const Color(0xFFA78BFA)
-                                : isCurrent
-                                    ? const Color(0xFFA78BFA)
-                                    : const Color(0xFFA78BFA)
-                                        .withValues(alpha: 0.18),
+                            color: isCurrent || isSelected
+                                ? const Color(0xFFFF5F1F)
+                                : Colors.white12,
                             width: isSelected ? 1.4 : 1,
                           ),
                         ),
                         leading: Icon(
                           Icons.description_outlined,
                           color: isCurrent || isSelected
-                              ? const Color(0xFFA78BFA)
-                              : Colors.white.withValues(alpha: 0.6),
+                              ? const Color(0xFFFF5F1F)
+                              : Colors.white70,
                           size: 18,
                         ),
                         title: Text(
@@ -249,8 +239,8 @@ class HistorySidebar extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.shareTechMono(
                             color: isCurrent || isSelected
-                                ? const Color(0xFFA78BFA)
-                                : Colors.white.withValues(alpha: 0.8),
+                                ? const Color(0xFFFF5F1F)
+                                : Colors.white70,
                             fontSize: 12,
                             fontWeight: isCurrent || isSelected
                                 ? FontWeight.w600
@@ -270,10 +260,10 @@ class HistorySidebar extends StatelessWidget {
                                     ? null
                                     : (_) => chatProvider
                                         .toggleSessionSelection(sid),
-                                activeColor: const Color(0xFFA78BFA),
-                                checkColor: const Color(0xFF0D0D12),
+                                activeColor: const Color(0xFFFF5F1F),
+                                checkColor: const Color(0xFF1A1A1D),
                                 side: BorderSide(
-                                  color: const Color(0xFFA78BFA)
+                                  color: const Color(0xFFFF5F1F)
                                       .withValues(alpha: 0.5),
                                   width: 1.6,
                                 ),

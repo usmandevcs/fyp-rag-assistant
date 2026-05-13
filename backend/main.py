@@ -13,13 +13,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session as SQLSession
+from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document
 
 try:
     from backend import rag_engine
     from backend.database import Session as DBSession, ChatMessage, UploadedFile, get_db
+    from backend.vision_utils import extract_images_from_pdf, generate_image_caption
 except ImportError:
     import rag_engine
     from database import Session as DBSession, ChatMessage, UploadedFile, get_db
+    from vision_utils import extract_images_from_pdf, generate_image_caption
 
 load_dotenv()
 
@@ -39,12 +43,14 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 class ChatRequest(BaseModel):
     session_id: str
     question: str
+    pinned_messages: list[str] = []
 
 
 class ChatResponse(BaseModel):
     answer: str
     sources: List[str] = []
     follow_ups: List[str] = []
+    chart_data: list | None = None
 
 
 class VoiceChatResponse(BaseModel):
@@ -52,6 +58,7 @@ class VoiceChatResponse(BaseModel):
     answer: str
     sources: List[str] = []
     follow_ups: List[str] = []
+    chart_data: list | None = None
 
 
 class SessionResponseItem(BaseModel):
@@ -104,6 +111,43 @@ async def upload_pdf(file: UploadFile = File(...), db: SQLSession = Depends(get_
 
     chunk_count = rag_engine.ingest_pdf(file_path, session_id)
 
+    # Extract images from PDF and add them as documents
+    try:
+        images = extract_images_from_pdf(file_path)
+        if images:
+            image_documents = []
+            for idx, image in enumerate(images):
+                try:
+                    caption = generate_image_caption(image)
+                    # Create a Document object for this image caption
+                    image_doc = Document(
+                        page_content=f"[Extracted Chart/Image Data]: {caption}",
+                        metadata={
+                            "source": file.filename,
+                            "type": "image",
+                            "image_index": idx
+                        }
+                    )
+                    image_documents.append(image_doc)
+                except Exception as img_err:
+                    print(f"Error generating caption for image {idx}: {img_err}")
+                    continue
+            
+            # Add image documents to the same ChromaDB collection
+            if image_documents:
+                try:
+                    vectorstore = Chroma(
+                        persist_directory="chroma_db",
+                        embedding=rag_engine._get_embeddings(),
+                        collection_name=session_id
+                    )
+                    vectorstore.add_documents(image_documents)
+                    chunk_count += len(image_documents)
+                except Exception as db_err:
+                    print(f"Warning: Failed to add image documents to ChromaDB: {db_err}")
+    except Exception as e:
+        print(f"Warning: Image extraction skipped: {e}")
+
     # Create database session record
     db_session = DBSession(
         id=session_id,
@@ -138,10 +182,15 @@ def chat(request: ChatRequest, db: SQLSession = Depends(get_db)):
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    result = rag_engine.ask_question(request.session_id, request.question)
+    result = rag_engine.ask_question(
+        request.session_id,
+        request.question,
+        request.pinned_messages,
+    )
     answer = result["answer"]
     sources = result.get("sources", [])
     follow_ups = result.get("follow_ups", [])
+    chart_data = result.get("chart_data")
     
     # Store chat message in database
     chat_message = ChatMessage(
@@ -152,7 +201,7 @@ def chat(request: ChatRequest, db: SQLSession = Depends(get_db)):
     db.add(chat_message)
     db.commit()
     
-    return ChatResponse(answer=answer, sources=sources, follow_ups=follow_ups)
+    return ChatResponse(answer=answer, sources=sources, follow_ups=follow_ups, chart_data=chart_data)
 
 
 @app.post("/chat_voice", response_model=VoiceChatResponse)
@@ -183,6 +232,7 @@ async def chat_voice(
         answer = result["answer"]
         sources = result.get("sources", [])
         follow_ups = result.get("follow_ups", [])
+        chart_data = result.get("chart_data")
 
         # Store chat message in database
         chat_message = ChatMessage(
@@ -193,7 +243,7 @@ async def chat_voice(
         db.add(chat_message)
         db.commit()
 
-        return VoiceChatResponse(question=question, answer=answer, sources=sources, follow_ups=follow_ups)
+        return VoiceChatResponse(question=question, answer=answer, sources=sources, follow_ups=follow_ups, chart_data=chart_data)
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -222,10 +272,15 @@ def chat_multi(request: MultiChatRequest, db: SQLSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
     try:
-        result = rag_engine.ask_multiple_questions(request.session_ids, request.question)
+        result = rag_engine.ask_multiple_questions(
+            request.session_ids,
+            request.question,
+            request.pinned_messages,
+        )
         answer = result["answer"]
         sources = result.get("sources", [])
         follow_ups = result.get("follow_ups", [])
+        chart_data = result.get("chart_data")
 
         # Store a chat record under the first session for history tracking
         chat_message = ChatMessage(
@@ -236,7 +291,7 @@ def chat_multi(request: MultiChatRequest, db: SQLSession = Depends(get_db)):
         db.add(chat_message)
         db.commit()
 
-        return ChatResponse(answer=answer, sources=sources, follow_ups=follow_ups)
+        return ChatResponse(answer=answer, sources=sources, follow_ups=follow_ups, chart_data=chart_data)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Multi-document chat failed: {str(e)}"

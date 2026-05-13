@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import tempfile
 import gdown
 
@@ -112,6 +113,7 @@ def transcribe_audio(file_path: str) -> str:
                 transcription = client.audio.transcriptions.create(
                     file=audio_file,
                     model="whisper-large-v3",
+                    language="en",
                 )
             text = transcription.text if hasattr(transcription, "text") else str(transcription)
             if not text or not text.strip():
@@ -316,6 +318,7 @@ def ingest_url(url: str, session_id: str) -> int:
                         transcription = client.audio.transcriptions.create(
                             file=audio_file,
                             model="whisper-large-v3",
+                            language="en",
                         )
 
                     transcribed_text = transcription.text if hasattr(transcription, "text") else str(transcription)
@@ -438,37 +441,131 @@ def ingest_raw_text(text: str, session_id: str) -> int:
     return len(chunks)
 
 
-def _parse_chat_json(raw_text: str) -> tuple[str, list[str]]:
-    """Parse JSON response from the LLM, fallback to gracefully returning an error if invalid."""
-    cleaned = raw_text.replace('```json', '').replace('```', '').strip()
+def _fallback_extract_answer_followups(text: str) -> tuple[str, list[str], list | None] | None:
+    """If full JSON parse fails, pull ``answer`` and ``follow_ups`` using ``JSONDecoder`` / regex heuristics."""
+    dec = json.JSONDecoder()
+    brace_start = text.find("{")
+    if brace_start != -1:
+        try:
+            obj, _ = dec.raw_decode(text, brace_start)
+            if isinstance(obj, dict):
+                ans = obj.get("answer")
+                if ans is not None:
+                    if not isinstance(ans, str):
+                        ans = str(ans)
+                    fu = obj.get("follow_ups", [])
+                    if not isinstance(fu, list):
+                        fu = []
+                    cd = obj.get("chart_data")
+                    if not isinstance(cd, list):
+                        cd = None
+                    return ans, [str(x) for x in fu], cd
+        except json.JSONDecodeError:
+            pass
+
+    m = re.search(r'"answer"\s*:\s*', text)
+    if not m:
+        return None
+    pos = m.end()
+    try:
+        answer, _ = dec.raw_decode(text, pos)
+        if not isinstance(answer, str):
+            answer = str(answer)
+    except json.JSONDecodeError:
+        rel = text[pos:].lstrip()
+        if not rel.startswith('"'):
+            return None
+        bm = re.search(r'"\s*,\s*"follow_ups"', rel)
+        if not bm:
+            return None
+        inner = rel[1 : bm.start()]
+        try:
+            answer = json.loads('"' + inner + '"')
+        except json.JSONDecodeError:
+            answer = inner.replace("\\n", "\n")
+
+    follow_ups: list[str] = []
+    fm = re.search(r'"follow_ups"\s*:\s*', text)
+    if fm:
+        fpos = fm.end()
+        try:
+            raw_list, _ = dec.raw_decode(text, fpos)
+            if isinstance(raw_list, list):
+                follow_ups = [str(x) for x in raw_list]
+        except json.JSONDecodeError:
+            pass
+
+    chart_data = None
+    cm = re.search(r'"chart_data"\s*:\s*', text)
+    if cm:
+        cpos = cm.end()
+        try:
+            raw_list, _ = dec.raw_decode(text, cpos)
+            if isinstance(raw_list, list):
+                chart_data = raw_list
+        except json.JSONDecodeError:
+            pass
+
+    return answer, follow_ups, chart_data
+
+
+def _parse_chat_json(raw_text: str) -> tuple[str, list[str], list | None]:
+    """Parse JSON response from the LLM; clean aggressively, then fall back so callers never see a JSON parse error string."""
+    raw_output = raw_text.replace("```json", "").replace("```", "").strip()
+    cleaned_output = raw_output.replace("'\n|", "\n|").replace("|\n'", "|\n")
+    table_fixed = cleaned_output
+    cleaned_output = cleaned_output.replace("\n", "\\n")
 
     parsed = None
-    try:
-        parsed = json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
-        
-    if parsed is None:
-        import re
-        match = re.search(r'\{[\s\S]*\}', cleaned)
-        if match:
-            try:
-                parsed = json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
+    for candidate in (cleaned_output, table_fixed, raw_output):
+        try:
+            parsed = json.loads(candidate, strict=False)
+            break
+        except json.JSONDecodeError:
+            continue
 
-    if parsed and isinstance(parsed, dict):
-        ans = parsed.get("answer", "Error parsing JSON")
+    if parsed is None:
+        for blob_src in (cleaned_output, table_fixed, raw_output):
+            json_match = re.search(r"\{[\s\S]*\}", blob_src)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group(0), strict=False)
+                    break
+                except json.JSONDecodeError:
+                    continue
+
+    if parsed is not None and isinstance(parsed, dict):
+        ans = parsed.get("answer")
+        if ans is None:
+            for src in (cleaned_output, table_fixed, raw_output):
+                fb = _fallback_extract_answer_followups(src)
+                if fb is not None:
+                    return fb
+            return "", [], None
         if not isinstance(ans, str):
             ans = str(ans)
         follow_ups = parsed.get("follow_ups", [])
         if not isinstance(follow_ups, list):
             follow_ups = []
-        return ans, follow_ups
-        
-    return "Error parsing JSON", []
+        follow_ups = [str(x) for x in follow_ups]
+        chart_data = parsed.get("chart_data")
+        if not isinstance(chart_data, list):
+            chart_data = None
+        return ans, follow_ups, chart_data
 
-def ask_question(session_id: str, question: str) -> dict:
+    fb = _fallback_extract_answer_followups(cleaned_output)
+    if fb is not None:
+        return fb
+    fb = _fallback_extract_answer_followups(table_fixed)
+    if fb is not None:
+        return fb
+    fb = _fallback_extract_answer_followups(raw_output)
+    if fb is not None:
+        return fb
+
+    return "", [], None
+
+def ask_question(session_id: str, question: str, pinned_messages: list[str] = None) -> dict:
     """Ask a question against the session's document. Returns dict with 'answer' and 'sources'."""
     chain_key = session_id
     if chain_key not in _chains:
@@ -487,13 +584,19 @@ def ask_question(session_id: str, question: str) -> dict:
     chain = _chains[chain_key]
     chat_history = _chat_histories.setdefault(session_id, [])
     try:
-        result = chain.invoke({"question": question, "chat_history": chat_history})
+        result = chain.invoke(
+            {
+                "question": question,
+                "chat_history": chat_history,
+                "pinned_context": _get_pinned_context(pinned_messages),
+            }
+        )
         
         global _groq_requests_count
         _groq_requests_count += 1
         
         raw_answer = result["answer"]
-        answer, follow_ups = _parse_chat_json(raw_answer)
+        answer, follow_ups, chart_data = _parse_chat_json(raw_answer)
         chat_history.append((question, answer))
 
         # Extract unique sources from returned source documents
@@ -511,7 +614,7 @@ def ask_question(session_id: str, question: str) -> dict:
                 seen.add(label)
                 sources.append(label)
 
-        return {"answer": answer, "sources": sources, "follow_ups": follow_ups}
+        return {"answer": answer, "sources": sources, "follow_ups": follow_ups, "chart_data": chart_data}
     except Exception as first_error:
         if not _is_retryable_llm_error(first_error):
             raise
@@ -519,7 +622,9 @@ def ask_question(session_id: str, question: str) -> dict:
         return {"answer": "Chat generation failed. Please try again later.", "sources": []}
 
 
-def ask_multiple_questions(session_ids: list[str], question: str) -> dict:
+def ask_multiple_questions(
+    session_ids: list[str], question: str, pinned_messages: list[str] = None
+) -> dict:
     """Query multiple document sessions simultaneously and return a unified answer."""
     if not session_ids:
         return {"answer": "No session IDs provided.", "sources": []}
@@ -554,16 +659,24 @@ def ask_multiple_questions(session_ids: list[str], question: str) -> dict:
 
     combined_context = "\n\n---\n\n".join(context_parts)
 
+    pinned_context = _get_pinned_context(pinned_messages)
+
     # Build the prompt
     prompt = (
         "You are Vesper Core, an enterprise AI assistant. Provide a highly accurate, professional, and clear answer based on the context.\n\n"
+        "CRITICAL PINNED MEMORY: You must absolutely remember and prioritize the following user-pinned facts during this conversation:\n"
+        f"{pinned_context}\n\n"
         "Use ONLY the following context retrieved from multiple documents to answer the user's question. "
         "If the context does not contain enough information, say so.\n\n"
-        "CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do not wrap the JSON in markdown formatting or backticks (e.g., do not use ```json). Do not include any introductory or concluding text outside the JSON.\n"
+        "CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do not wrap the JSON in markdown formatting or backticks (e.g., do not use ```json). Do not include any introductory or concluding text outside the JSON.\n\n"
+        "CRITICAL JSON ESCAPING: If your answer includes Markdown tables, lists, or multiple lines, you MUST escape all newline characters as '\\n' and double quotes as '\\\"' inside the JSON string values. The output must be valid JSON.\n\n"
+        "STRICT MARKDOWN TABLE CONSTRAINT: If you generate a Markdown table, you MUST escape all newlines as the literal string '\\n'. NEVER output raw, unescaped newline characters inside the JSON values. Do not wrap the table in single or double quotes.\n\n"
+        "FORMATTING RULE: If the user specifically asks for a table, list, or structured data, format the string inside the 'answer' field using standard Markdown tables or lists. Use \\n (newline) characters to separate rows and list items. The answer string itself must be valid JSON-escaped text.\n\n"
         "Required JSON Schema:\n"
         "{\n"
         '   "answer": "<Your response here>",\n'
-        '   "follow_ups": ["<Q1>", "<Q2>", "<Q3>"]\n'
+        '   "follow_ups": ["<Q1>", "<Q2>", "<Q3>"],\n'
+        '   "chart_data": [{"label": "A", "value": 10}] (optional, only if asked for a chart)\n'
         "}\n\n"
         "----------------\n"
         f"Context:\n{combined_context}\n\n"
@@ -577,10 +690,10 @@ def ask_multiple_questions(session_ids: list[str], question: str) -> dict:
         llm = _get_llm()
         response = llm.invoke(prompt)
         raw_answer = response.content if hasattr(response, "content") else str(response)
-        answer, follow_ups = _parse_chat_json(raw_answer)
+        answer, follow_ups, chart_data = _parse_chat_json(raw_answer)
     except Exception as e:
         if _is_retryable_llm_error(e):
-            return {"answer": "Chat generation failed. Please try again later.", "sources": [], "follow_ups": []}
+            return {"answer": "Chat generation failed. Please try again later.", "sources": [], "follow_ups": [], "chart_data": None}
         raise
 
     # Extract unique source labels
@@ -598,7 +711,7 @@ def ask_multiple_questions(session_ids: list[str], question: str) -> dict:
             seen.add(label)
             sources.append(label)
 
-    return {"answer": answer, "sources": sources, "follow_ups": follow_ups}
+    return {"answer": answer, "sources": sources, "follow_ups": follow_ups, "chart_data": chart_data}
 
 
 def generate_structured_summary(session_id: str) -> dict:
@@ -624,16 +737,16 @@ def generate_structured_summary(session_id: str) -> dict:
     context = "\n\n---\n\n".join(doc.page_content for doc in docs)
 
     prompt = (
-        "You are an expert document analyst. Analyze the following document content "
-        "and produce a structured summary.\n\n"
+        "You are a document analyzer. Your task is to return a JSON object with EXACTLY four keys: "
+        "'overview' (a concise paragraph), 'key_findings' (a list of strings), "
+        "'critical_data_points' (a list of strings), and 'conclusion' (a final summary paragraph).\n\n"
         "CRITICAL INSTRUCTIONS:\n"
-        "- You MUST output ONLY a valid JSON object. No markdown, no code fences, no extra text.\n"
-        "- The JSON object MUST have exactly these four keys:\n"
-        '  1. "overview" — A concise 2-3 sentence overview of the document.\n'
-        '  2. "key_findings" — A JSON array of 3-5 key findings (strings).\n'
-        '  3. "critical_data_points" — A JSON array of 3-5 important data points, '
-        'statistics, or facts (strings).\n'
-        '  4. "conclusion" — A 2-3 sentence conclusion summarizing the implications.\n\n'
+        "- You MUST output ONLY raw JSON. No markdown, no code fences, no extra text.\n"
+        "- The response MUST contain exactly these four keys and no others: overview, key_findings, critical_data_points, conclusion.\n"
+        "- Distribute the information accurately across the four keys. Do NOT dump all information into the overview.\n"
+        "- For this summary endpoint, DO NOT use Markdown tables or any table format.\n"
+        "- Keep overview and conclusion as plain paragraph strings.\n"
+        "- key_findings and critical_data_points MUST be JSON arrays of strings.\n\n"
         f"Document Content:\n{context}\n\n"
         "JSON Output:"
     )
@@ -701,16 +814,31 @@ def _get_prompt():
 
     system_template = """You are Vesper Core, an enterprise AI assistant. Provide a highly accurate, professional, and clear answer based on the context.
 
+CRITICAL PINNED MEMORY: You must absolutely remember and prioritize the following user-pinned facts during this conversation:
+{pinned_context}
+
 Use the following pieces of context to answer the users question. 
 If you don't know the answer, just say that you don't know, don't try to make up an answer.
 ----------------
 {context}
 
-CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do not wrap the JSON in markdown formatting or backticks (e.g., do not use ```json). Do not include any introductory or concluding text outside the JSON. 
+CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do not wrap the JSON in markdown formatting or backticks (e.g., do not use ```json). Do not include any introductory or concluding text outside the JSON.
+
+CRITICAL JSON ESCAPING: If your answer includes Markdown tables, lists, or multiple lines, you MUST escape all newline characters as '\\n' and double quotes as '\\\"' inside the JSON string values. The output must be valid JSON.
+
+STRICT MARKDOWN TABLE CONSTRAINT: If you generate a Markdown table, you MUST escape all newlines as the literal string '\\n'. NEVER output raw, unescaped newline characters inside the JSON values. Do not wrap the table in single or double quotes.
+
+FORMATTING RULE: If the user specifically asks for a table, list, or structured data, format the string inside the 'answer' field using standard Markdown tables or lists. Use \\n (newline) characters to separate rows and list items. The answer string itself must be valid JSON-escaped text.
+
+CRITICAL CHART RULE: If the user explicitly asks to generate a CHART or GRAPH, you MUST extract the relevant numerical data and populate the `chart_data` field in your JSON response. The `chart_data` field MUST be an array of objects exactly like this example: [{"label": "Category A", "value": 50}, {"label": "Category B", "value": 75}]. NEVER draw ASCII charts or text-based graphs inside the 'answer' field — numeric data belongs in `chart_data` and visual rendering is the caller's responsibility.
+
+TABLE PRESENTATION RULE: If the user asks for a TABLE, generate a beautifully formatted Markdown table inside the 'answer' field. Ensure all newlines inside the JSON string are escaped as '\\n' so the JSON remains valid when parsed. Do not put the table data into `chart_data` unless the user specifically asked for a chart.
+
 Required JSON Schema:
 {{
    "answer": "<Your persona-adjusted response here>",
-   "follow_ups": ["<Q1>", "<Q2>", "<Q3>"]
+   "follow_ups": ["<Q1>", "<Q2>", "<Q3>"],
+    "chart_data": [{"label": "Category A", "value": 50}, {"label": "Category B", "value": 75}] (optional, only if asked for a chart)
 }}"""
 
     messages = [
@@ -718,6 +846,12 @@ Required JSON Schema:
         HumanMessagePromptTemplate.from_template("{question}"),
     ]
     return ChatPromptTemplate.from_messages(messages)
+
+
+def _get_pinned_context(pinned_messages: list[str] | None) -> str:
+    if pinned_messages:
+        return "\n".join(pinned_messages)
+    return "No pinned facts."
 
 
 def _build_chain(vectorstore: Chroma) -> ConversationalRetrievalChain:

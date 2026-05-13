@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:fl_chart/fl_chart.dart';
+
+import '../models/chat_message.dart';
+import '../providers/chat_provider.dart';
 
 class ChatBubble extends StatefulWidget {
   const ChatBubble({
@@ -7,41 +13,40 @@ class ChatBubble extends StatefulWidget {
     required this.text,
     required this.isUser,
     required this.animate,
+    this.message,
     this.sources,
     this.followUps,
     this.onFollowUpTap,
+    this.onAssistantAnimationFinished,
   });
 
   final String text;
   final bool isUser;
   final bool animate;
+  /// When set for assistant messages, [isAnimationFinished] controls typewriter vs static markdown.
+  final ChatMessage? message;
   final String? sources;
   final List<String>? followUps;
   final void Function(String)? onFollowUpTap;
+  final void Function(ChatMessage message)? onAssistantAnimationFinished;
 
   @override
   State<ChatBubble> createState() => _ChatBubbleState();
 }
 
 class _ChatBubbleState extends State<ChatBubble> {
-  /// Tracks whether the initial streaming animation has already played.
-  /// Once true, subsequent rebuilds (e.g. summary dashboard appearing)
-  /// will render full static text instead of re-triggering the typewriter.
-  bool _hasAnimated = false;
-
   @override
   Widget build(BuildContext context) {
     final backgroundColor = widget.isUser
-        ? const Color(0xFF1A1A1A)
-        : Colors.transparent;
-    final textColor = widget.isUser ? Colors.white : const Color(0xFFA78BFA);
+        ? Colors.transparent
+        : const Color(0xFF2D2D34);
+    final border = widget.isUser
+        ? Border.all(color: const Color(0xFFFF5F1F), width: 1.5)
+        : null;
+    final textColor = Colors.white;
     final alignment = widget.isUser ? Alignment.centerRight : Alignment.centerLeft;
-    final borderRadius = BorderRadius.only(
-      topLeft: const Radius.circular(20),
-      topRight: const Radius.circular(20),
-      bottomLeft: Radius.circular(widget.isUser ? 20 : 6),
-      bottomRight: Radius.circular(widget.isUser ? 6 : 20),
-    );
+    final borderRadius = BorderRadius.circular(16);
+    final screenWidth = MediaQuery.sizeOf(context).width;
 
     final hasSources = !widget.isUser &&
         widget.sources != null &&
@@ -51,21 +56,23 @@ class _ChatBubbleState extends State<ChatBubble> {
         widget.followUps != null && 
         widget.followUps!.isNotEmpty;
 
-    // Determine whether the typewriter animation should play this build.
-    // It should only play once — when `animate` is first true and we haven't
-    // animated yet. After it finishes (or if it already played), show static text.
-    final shouldAnimate = widget.animate && !_hasAnimated && !widget.isUser;
+    final animationFinished = widget.message?.isAnimationFinished ?? false;
+    final useTypewriter =
+        !widget.isUser && !animationFinished && widget.animate;
 
     return Align(
       alignment: alignment,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
+        constraints: BoxConstraints(
+          maxWidth: screenWidth < 600 ? screenWidth * 0.85 : screenWidth * 0.65,
+        ),
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: borderRadius,
+            border: border,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,39 +87,63 @@ class _ChatBubbleState extends State<ChatBubble> {
                         height: 1.35,
                       ),
                     )
-                  : shouldAnimate
-                      ? AnimatedTextKit(
-                          key: ValueKey<String>(widget.text),
-                          isRepeatingAnimation: false,
-                          totalRepeatCount: 1,
-                          onFinished: () {
-                            // Mark as animated so future rebuilds skip the animation.
-                            if (mounted) {
-                              setState(() => _hasAnimated = true);
-                            }
-                          },
-                          animatedTexts: [
-                            TypewriterAnimatedText(
-                              widget.text,
-                              speed: const Duration(milliseconds: 18),
-                              textStyle: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: const Color(0xFFA78BFA),
-                                    height: 1.35,
-                                  ),
-                            ),
-                          ],
-                        )
-                      : Text(
-                          widget.text,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFFA78BFA),
-                                height: 1.35,
-                              ),
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Message content (animated or static)
+                        Expanded(
+                          child: animationFinished
+                              ? _buildAssistantMarkdown(context)
+                              : useTypewriter
+                                  ? AnimatedTextKit(
+                                      key: ValueKey<String>(widget.text),
+                                      isRepeatingAnimation: false,
+                                      totalRepeatCount: 1,
+                                      onFinished: () {
+                                        final m = widget.message;
+                                        if (m != null) {
+                                          widget.onAssistantAnimationFinished
+                                              ?.call(m);
+                                        }
+                                      },
+                                      animatedTexts: [
+                                        TypewriterAnimatedText(
+                                          widget.text,
+                                          speed: const Duration(milliseconds: 18),
+                                          textStyle: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: Colors.white70,
+                                                height: 1.35,
+                                              ),
+                                        ),
+                                      ],
+                                    )
+                                  : _buildAssistantMarkdown(context),
                         ),
+
+                        // Pin button for AI messages
+                        Consumer<ChatProvider>(
+                          builder: (context, provider, _) {
+                            final isPinned = provider.pinnedMessages.contains(widget.text);
+                            return IconButton(
+                              padding: const EdgeInsets.only(left: 8),
+                              constraints: const BoxConstraints(),
+                              icon: Icon(
+                                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                                size: 18,
+                                color: isPinned
+                                    ? const Color(0xFFFF5F1F)
+                                    : const Color(0xFFFF5F1F).withValues(alpha: 0.6),
+                              ),
+                              onPressed: () => provider.togglePinMessage(widget.text),
+                              tooltip: isPinned ? 'Unpin message' : 'Pin message',
+                            );
+                          },
+                        ),
+                      ],
+                    ),
 
               // --- Citation chips ---
               if (hasSources) ...[
@@ -124,7 +155,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                     color: const Color(0xFF0D0D12),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: const Color(0xFFA78BFA).withValues(alpha: 0.18),
+                      color: const Color(0xFFFF5F1F).withValues(alpha: 0.18),
                     ),
                   ),
                   child: Column(
@@ -138,7 +169,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                             Icons.auto_stories_outlined,
                             size: 12,
                             color:
-                                const Color(0xFFA78BFA).withValues(alpha: 0.6),
+                                const Color(0xFFFF5F1F).withValues(alpha: 0.6),
                           ),
                           const SizedBox(width: 5),
                           Text(
@@ -147,7 +178,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                               fontSize: 9.5,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.4,
-                              color: const Color(0xFFA78BFA)
+                              color: const Color(0xFFFF5F1F)
                                   .withValues(alpha: 0.55),
                             ),
                           ),
@@ -178,7 +209,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                         Icon(
                           Icons.lightbulb_outline,
                           size: 14,
-                          color: const Color(0xFF22C55E).withValues(alpha: 0.8),
+                          color: const Color(0xFFFF5F1F).withValues(alpha: 0.8),
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -187,7 +218,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.2,
-                            color: const Color(0xFF22C55E).withValues(alpha: 0.7),
+                            color: const Color(0xFFFF5F1F).withValues(alpha: 0.7),
                           ),
                         ),
                       ],
@@ -202,15 +233,15 @@ class _ChatBubbleState extends State<ChatBubble> {
                           child: InkWell(
                             onTap: () => widget.onFollowUpTap?.call(q),
                             borderRadius: BorderRadius.circular(16),
-                            hoverColor: const Color(0xFF22C55E).withValues(alpha: 0.1),
-                            splashColor: const Color(0xFF22C55E).withValues(alpha: 0.2),
+                            hoverColor: const Color(0xFFFF5F1F).withValues(alpha: 0.1),
+                            splashColor: const Color(0xFFFF5F1F).withValues(alpha: 0.2),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF22C55E).withValues(alpha: 0.05),
+                                color: const Color(0xFFFF5F1F).withValues(alpha: 0.05),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: const Color(0xFF22C55E).withValues(alpha: 0.3),
+                                  color: const Color(0xFFFF5F1F).withValues(alpha: 0.3),
                                   width: 1,
                                 ),
                               ),
@@ -223,7 +254,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                                       style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
-                                        color: Color(0xFF22C55E),
+                                        color: Color(0xFFFF5F1F),
                                         height: 1.2,
                                       ),
                                     ),
@@ -232,7 +263,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                                   const Icon(
                                     Icons.arrow_forward_ios,
                                     size: 10,
-                                    color: Color(0xFF22C55E),
+                                    color: Color(0xFFFF5F1F),
                                   ),
                                 ],
                               ),
@@ -251,6 +282,124 @@ class _ChatBubbleState extends State<ChatBubble> {
     );
   }
 
+  Widget _buildAssistantMarkdown(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MarkdownBody(
+          data: widget.text,
+          styleSheet: MarkdownStyleSheet(
+            p: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white70,
+                  height: 1.35,
+                ),
+            h1: const TextStyle(
+              color: Color(0xFFFF5F1F),
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+            h2: const TextStyle(
+              color: Color(0xFFFF5F1F),
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+            h3: const TextStyle(
+              color: Color(0xFFFF5F1F),
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+            em: const TextStyle(
+              color: Color(0xFFFF5F1F),
+              fontStyle: FontStyle.italic,
+            ),
+            strong: const TextStyle(
+              color: Color(0xFFFF5F1F),
+              fontWeight: FontWeight.bold,
+            ),
+            listBullet: const TextStyle(
+              color: Color(0xFFFF5F1F),
+            ),
+            tableBody: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+            ),
+            tableHead: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+            tableBorder: TableBorder.all(
+              color: const Color(0xFFFF5F1F).withValues(alpha: 0.5),
+              width: 1,
+            ),
+            tableCellsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            tableHeadAlign: TextAlign.center,
+          ),
+          onTapLink: (text, href, title) {},
+        ),
+        if (widget.message?.chartData != null && widget.message!.chartData!.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: BarChart(
+              BarChartData(
+                barGroups: widget.message!.chartData!.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final data = entry.value as Map<String, dynamic>;
+                  final val = (data['value'] as num).toDouble();
+                  return BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                        toY: val,
+                        color: const Color(0xFFFF5F1F),
+                        width: 16,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      ),
+                    ],
+                  );
+                }).toList(),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index >= 0 && index < widget.message!.chartData!.length) {
+                          final label = widget.message!.chartData![index]['label']?.toString() ?? '';
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              label,
+                              style: const TextStyle(color: Colors.white70, fontSize: 10),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                      reservedSize: 28,
+                    ),
+                  ),
+                  leftTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                gridData: const FlGridData(show: false),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   List<Widget> _buildSourceChips(String sourcesString) {
     final items = sourcesString
         .split(',')
@@ -262,15 +411,15 @@ class _ChatBubbleState extends State<ChatBubble> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
         decoration: BoxDecoration(
-          color: const Color(0xFFA78BFA).withValues(alpha: 0.08),
+          color: const Color(0xFFFF5F1F).withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: const Color(0xFFA78BFA).withValues(alpha: 0.25),
+            color: const Color(0xFFFF5F1F).withValues(alpha: 0.25),
             width: 0.8,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFA78BFA).withValues(alpha: 0.06),
+              color: const Color(0xFFFF5F1F).withValues(alpha: 0.06),
               blurRadius: 6,
             ),
           ],
@@ -281,7 +430,7 @@ class _ChatBubbleState extends State<ChatBubble> {
             Icon(
               Icons.description_outlined,
               size: 11,
-              color: const Color(0xFFA78BFA).withValues(alpha: 0.7),
+              color: const Color(0xFFFF5F1F).withValues(alpha: 0.7),
             ),
             const SizedBox(width: 4),
             Text(
@@ -289,7 +438,7 @@ class _ChatBubbleState extends State<ChatBubble> {
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFFA78BFA),
+                color: Color(0xFFFF5F1F),
                 letterSpacing: 0.3,
               ),
             ),

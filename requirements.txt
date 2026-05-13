@@ -11,3 +11,6 @@ sqlalchemy
 alembic
 groq
 yt-dlp
+pymupdf
+Pillow
+google-genai
