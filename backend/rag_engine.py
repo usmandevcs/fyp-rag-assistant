@@ -16,6 +16,11 @@ import yt_dlp
 from groq import Groq
 import trafilatura
 
+try:
+    from backend.prompts import CHAT_SYSTEM_TEMPLATE, MULTI_CHAT_PROMPT_TEMPLATE
+except ImportError:
+    from prompts import CHAT_SYSTEM_TEMPLATE, MULTI_CHAT_PROMPT_TEMPLATE
+
 
 load_dotenv()
 
@@ -253,7 +258,7 @@ def ingest_pdf(file_path: str, session_id: str) -> int:
     # Filter out empty or whitespace-only chunks to avoid embedding/indexing errors
     valid_chunks = [chunk for chunk in chunks if chunk.page_content and chunk.page_content.strip()]
     if not valid_chunks:
-        raise ValueError("No readable text found in this PDF. Please upload a text-based PDF.")
+        return 0
 
     vectorstore = None
     for _ in range(2):
@@ -662,27 +667,10 @@ def ask_multiple_questions(
     pinned_context = _get_pinned_context(pinned_messages)
 
     # Build the prompt
-    prompt = (
-        "You are Vesper Core, an enterprise AI assistant. Provide a highly accurate, professional, and clear answer based on the context.\n\n"
-        "CRITICAL PINNED MEMORY: You must absolutely remember and prioritize the following user-pinned facts during this conversation:\n"
-        f"{pinned_context}\n\n"
-        "Use ONLY the following context retrieved from multiple documents to answer the user's question. "
-        "If the context does not contain enough information, say so.\n\n"
-        "CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do not wrap the JSON in markdown formatting or backticks (e.g., do not use ```json). Do not include any introductory or concluding text outside the JSON.\n\n"
-        "CRITICAL JSON ESCAPING: If your answer includes Markdown tables, lists, or multiple lines, you MUST escape all newline characters as '\\n' and double quotes as '\\\"' inside the JSON string values. The output must be valid JSON.\n\n"
-        "STRICT MARKDOWN TABLE CONSTRAINT: If you generate a Markdown table, you MUST escape all newlines as the literal string '\\n'. NEVER output raw, unescaped newline characters inside the JSON values. Do not wrap the table in single or double quotes.\n\n"
-        "FORMATTING RULE: If the user specifically asks for a table, list, or structured data, format the string inside the 'answer' field using standard Markdown tables or lists. Use \\n (newline) characters to separate rows and list items. The answer string itself must be valid JSON-escaped text.\n\n"
-        "Required JSON Schema:\n"
-        "{\n"
-        '   "answer": "<Your response here>",\n'
-        '   "follow_ups": ["<Q1>", "<Q2>", "<Q3>"],\n'
-        '   "chart_data": [{"label": "A", "value": 10}] (optional, only if asked for a chart)\n'
-        "}\n\n"
-        "----------------\n"
-        f"Context:\n{combined_context}\n\n"
-        "----------------\n"
-        f"Question: {question}\n\n"
-        "JSON Output:"
+    prompt = MULTI_CHAT_PROMPT_TEMPLATE.format(
+        pinned_context=pinned_context,
+        combined_context=combined_context,
+        question=question,
     )
 
     # Generate answer using the shared LLM
@@ -714,95 +702,10 @@ def ask_multiple_questions(
     return {"answer": answer, "sources": sources, "follow_ups": follow_ups, "chart_data": chart_data}
 
 
-def generate_structured_summary(session_id: str) -> dict:
-    """Generate a structured JSON summary of the document in the given session."""
-    # Load the vectorstore for this session
-    try:
-        vectorstore = Chroma(
-            persist_directory=CHROMA_DIR,
-            embedding_function=_get_embeddings(),
-            collection_name=session_id,
-        )
-    except Exception:
-        raise ValueError(f"No document found for session '{session_id}'.")
-
-    # Retrieve a broad set of representative chunks
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
-    docs = retriever.invoke("summarize the entire document")
-
-    if not docs:
-        raise ValueError("No document content found for this session.")
-
-    # Build combined context from retrieved chunks
-    context = "\n\n---\n\n".join(doc.page_content for doc in docs)
-
-    prompt = (
-        "You are a document analyzer. Your task is to return a JSON object with EXACTLY four keys: "
-        "'overview' (a concise paragraph), 'key_findings' (a list of strings), "
-        "'critical_data_points' (a list of strings), and 'conclusion' (a final summary paragraph).\n\n"
-        "CRITICAL INSTRUCTIONS:\n"
-        "- You MUST output ONLY raw JSON. No markdown, no code fences, no extra text.\n"
-        "- The response MUST contain exactly these four keys and no others: overview, key_findings, critical_data_points, conclusion.\n"
-        "- Distribute the information accurately across the four keys. Do NOT dump all information into the overview.\n"
-        "- For this summary endpoint, DO NOT use Markdown tables or any table format.\n"
-        "- Keep overview and conclusion as plain paragraph strings.\n"
-        "- key_findings and critical_data_points MUST be JSON arrays of strings.\n\n"
-        f"Document Content:\n{context}\n\n"
-        "JSON Output:"
-    )
-
-    try:
-        llm = _get_llm()
-        response = llm.invoke(prompt)
-        raw = response.content if hasattr(response, "content") else str(response)
-    except Exception as e:
-        if _is_retryable_llm_error(e):
-            raise ValueError("Summary generation failed due to API limits. Please try again later.")
-        raise
-
-    # Strip markdown code fences if the LLM wraps its output
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        # Remove opening fence (e.g. ```json)
-        cleaned = cleaned.split("\n", 1)[-1] if "\n" in cleaned else cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3].rstrip()
-
-    parsed = None
-    # Attempt 1: Direct parse
-    try:
-        parsed = json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
-
-    # Attempt 2: Extract first JSON object via braces
-    if parsed is None:
-        import re
-        match = re.search(r'\{[\s\S]*\}', cleaned)
-        if match:
-            try:
-                parsed = json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
-
-    # Fallback: return raw text under "overview"
-    if parsed is None:
-        parsed = {
-            "overview": cleaned,
-            "key_findings": [],
-            "critical_data_points": [],
-            "conclusion": "",
-        }
-
-    # Normalise keys to the expected schema
-    return {
-        "overview": parsed.get("overview", parsed.get("Overview", "")),
-        "key_findings": parsed.get("key_findings", parsed.get("Key Findings", [])),
-        "critical_data_points": parsed.get(
-            "critical_data_points", parsed.get("Critical Data Points", [])
-        ),
-        "conclusion": parsed.get("conclusion", parsed.get("Conclusion", "")),
-    }
+try:
+    from backend.summarizer import generate_structured_summary
+except ImportError:
+    from summarizer import generate_structured_summary
 
 
 def _get_prompt():
@@ -812,34 +715,7 @@ def _get_prompt():
         SystemMessagePromptTemplate,
     )
 
-    system_template = """You are Vesper Core, an enterprise AI assistant. Provide a highly accurate, professional, and clear answer based on the context.
-
-CRITICAL PINNED MEMORY: You must absolutely remember and prioritize the following user-pinned facts during this conversation:
-{pinned_context}
-
-Use the following pieces of context to answer the users question. 
-If you don't know the answer, just say that you don't know, don't try to make up an answer.
-----------------
-{context}
-
-CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do not wrap the JSON in markdown formatting or backticks (e.g., do not use ```json). Do not include any introductory or concluding text outside the JSON.
-
-CRITICAL JSON ESCAPING: If your answer includes Markdown tables, lists, or multiple lines, you MUST escape all newline characters as '\\n' and double quotes as '\\\"' inside the JSON string values. The output must be valid JSON.
-
-STRICT MARKDOWN TABLE CONSTRAINT: If you generate a Markdown table, you MUST escape all newlines as the literal string '\\n'. NEVER output raw, unescaped newline characters inside the JSON values. Do not wrap the table in single or double quotes.
-
-FORMATTING RULE: If the user specifically asks for a table, list, or structured data, format the string inside the 'answer' field using standard Markdown tables or lists. Use \\n (newline) characters to separate rows and list items. The answer string itself must be valid JSON-escaped text.
-
-CRITICAL CHART RULE: If the user explicitly asks to generate a CHART or GRAPH, you MUST extract the relevant numerical data and populate the `chart_data` field in your JSON response. The `chart_data` field MUST be an array of objects exactly like this example: [{"label": "Category A", "value": 50}, {"label": "Category B", "value": 75}]. NEVER draw ASCII charts or text-based graphs inside the 'answer' field — numeric data belongs in `chart_data` and visual rendering is the caller's responsibility.
-
-TABLE PRESENTATION RULE: If the user asks for a TABLE, generate a beautifully formatted Markdown table inside the 'answer' field. Ensure all newlines inside the JSON string are escaped as '\\n' so the JSON remains valid when parsed. Do not put the table data into `chart_data` unless the user specifically asked for a chart.
-
-Required JSON Schema:
-{{
-   "answer": "<Your persona-adjusted response here>",
-   "follow_ups": ["<Q1>", "<Q2>", "<Q3>"],
-    "chart_data": [{"label": "Category A", "value": 50}, {"label": "Category B", "value": 75}] (optional, only if asked for a chart)
-}}"""
+    system_template = CHAT_SYSTEM_TEMPLATE
 
     messages = [
         SystemMessagePromptTemplate.from_template(system_template),

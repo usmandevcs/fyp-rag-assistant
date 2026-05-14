@@ -201,14 +201,22 @@ class ApiService {
         );
       }
 
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map<String, dynamic>) {
-        throw const ApiException(
-          'Summary response was not a valid JSON object.',
-        );
+      dynamic decoded = jsonDecode(response.body);
+      if (decoded is String) {
+        decoded = jsonDecode(decoded);
       }
 
-      return decoded;
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+
+      throw const ApiException(
+        'Summary response was not a valid JSON object.',
+      );
     } on ApiException {
       rethrow;
     } catch (error) {

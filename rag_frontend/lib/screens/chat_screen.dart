@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:frontend/widgets/history_sidebar.dart';
 import 'package:frontend/widgets/chat_bubble.dart';
 import 'package:frontend/utils/summary_download.dart';
 import 'package:frontend/utils/custom_snackbar.dart';
+import 'package:frontend/widgets/premium_mic.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -988,49 +990,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                     }
                                     chatProvider.cancelRecording();
                                   },
-                                  child: _PulsingMicShell(
-                                    active: chatProvider.isRecording,
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      padding: EdgeInsets.all(
-                                        chatProvider.isRecording
-                                            ? 18
-                                            : 14,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: chatProvider.isRecording
-                                            ? const Color(0xFFEF4444)
-                                            : const Color(0xFFFF5F1F),
-                                        shape: BoxShape.circle,
-                                        boxShadow: chatProvider.isRecording
-                                            ? const <BoxShadow>[]
-                                            : [
-                                                BoxShadow(
-                                                  color: const Color(0xFFFF5F1F)
-                                                      .withValues(alpha: 0.34),
-                                                  blurRadius: 16,
-                                                ),
-                                              ],
-                                      ),
-                                      child: chatProvider.isProcessingVoice
-                                          ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                                backgroundColor:
-                                                    Color(0x33FFFFFF),
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.mic_rounded,
-                                              color: Colors.white,
-                                              size: 18,
-                                            ),
-                                    ),
+                                  child: PremiumMicButton(
+                                    isRecording: chatProvider.isRecording,
                                   ),
                                 ),
                               ),
@@ -1050,32 +1011,40 @@ class _ChatScreenState extends State<ChatScreen> {
   // Interactive Summary Dashboard widget
   // -------------------------------------------------------
 
-  Widget _buildInteractiveSummary(Map<String, dynamic> summaryData) {
+  Widget _buildInteractiveSummary(dynamic summaryData) {
     const neonOrange = Color(0xFFFF5F1F);
     const cardBg = Color(0xFF2D2D34);
     const borderColor = Color(0xFF3F3F46);
+
+    final normalizedSummary = _normalizeSummaryData(summaryData);
 
     final sections = <_SummarySection>[
       _SummarySection(
         icon: Icons.dashboard_outlined,
         title: 'Overview',
-        content: summaryData['overview']?.toString() ?? '',
+        content: _summaryTextValue(
+          normalizedSummary['overview'],
+          'No overview available',
+        ),
         isExpandedByDefault: true,
       ),
       _SummarySection(
         icon: Icons.lightbulb_outline,
         title: 'Key Findings',
-        items: _parseListField(summaryData['key_findings']),
+        items: _parseListField(normalizedSummary['key_findings']),
       ),
       _SummarySection(
         icon: Icons.analytics_outlined,
         title: 'Critical Data Points',
-        items: _parseListField(summaryData['critical_data_points']),
+        items: _parseListField(normalizedSummary['critical_data_points']),
       ),
       _SummarySection(
         icon: Icons.flag_outlined,
         title: 'Conclusion',
-        content: summaryData['conclusion']?.toString() ?? '',
+        content: _summaryTextValue(
+          normalizedSummary['conclusion'],
+          'No conclusion available',
+        ),
       ),
     ];
 
@@ -1271,6 +1240,36 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  Map<String, dynamic> _normalizeSummaryData(dynamic summaryData) {
+    dynamic value = summaryData;
+
+    if (value is String) {
+      try {
+        value = jsonDecode(value);
+      } catch (_) {
+        value = <String, dynamic>{};
+      }
+    }
+
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+
+    return <String, dynamic>{};
+  }
+
+  String _summaryTextValue(dynamic field, String fallback) {
+    final value = field?.toString().trim();
+    if (value == null || value.isEmpty) {
+      return fallback;
+    }
+    return value;
   }
 
   List<String> _parseListField(dynamic field) {

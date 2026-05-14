@@ -13,16 +13,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session as SQLSession
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 try:
     from backend import rag_engine
     from backend.database import Session as DBSession, ChatMessage, UploadedFile, get_db
+    from backend.summarizer import generate_structured_summary
     from backend.vision_utils import extract_images_from_pdf, generate_image_caption
 except ImportError:
     import rag_engine
     from database import Session as DBSession, ChatMessage, UploadedFile, get_db
+    from summarizer import generate_structured_summary
     from vision_utils import extract_images_from_pdf, generate_image_caption
 
 load_dotenv()
@@ -138,7 +140,7 @@ async def upload_pdf(file: UploadFile = File(...), db: SQLSession = Depends(get_
                 try:
                     vectorstore = Chroma(
                         persist_directory="chroma_db",
-                        embedding=rag_engine._get_embeddings(),
+                        embedding_function=rag_engine._get_embeddings(),
                         collection_name=session_id
                     )
                     vectorstore.add_documents(image_documents)
@@ -147,6 +149,9 @@ async def upload_pdf(file: UploadFile = File(...), db: SQLSession = Depends(get_
                     print(f"Warning: Failed to add image documents to ChromaDB: {db_err}")
     except Exception as e:
         print(f"Warning: Image extraction skipped: {e}")
+
+    if chunk_count == 0:
+        raise HTTPException(status_code=400, detail="No readable text or images found in this PDF.")
 
     # Create database session record
     db_session = DBSession(
@@ -309,7 +314,7 @@ class SummaryResponse(BaseModel):
 def get_structured_summary(session_id: str):
     """Generate a structured summary dashboard for the given document session."""
     try:
-        result = rag_engine.generate_structured_summary(session_id)
+        result = generate_structured_summary(session_id)
         return SummaryResponse(**result)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

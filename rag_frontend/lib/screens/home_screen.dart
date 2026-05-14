@@ -11,7 +11,7 @@ import 'package:frontend/widgets/history_sidebar.dart';
 const Color _vesperBlack = Color(0xFF1A1A1D);
 const Color _vesperSurface = Color(0xFF2D2D34);
 const Color _vesperCyan = Color(0xFFFF5F1F);
-const Color _vesperBorder = Color(0xFF2D2D34);
+const Color _vesperBorder = Colors.white12;
 const Color _vesperTextMuted = Color(0xFFA1A1AA);
 
 class HomeScreen extends StatefulWidget {
@@ -446,9 +446,10 @@ class _LinkTabState extends State<_LinkTab> {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: _vesperSurface,
+          color: _vesperBlack,
           border: Border.all(color: _vesperBorder, width: 1),
           borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

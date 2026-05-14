@@ -53,14 +53,11 @@ def extract_images_from_pdf(pdf_path: str) -> list[Image.Image]:
                         xref = img_info[0]
                         pix = fitz.Pixmap(pdf_document, xref)
                         
-                        # Convert to RGB if necessary (handle CMYK, grayscale, etc.)
-                        if pix.n - pix.alpha < 4:
-                            # Grayscale or RGB
-                            img_data = pix.tobytes("ppm")
-                        else:
-                            # CMYK or other; convert to RGB
-                            pix = fitz.Pixmap(fitz.csRGB, pix)
-                            img_data = pix.tobytes("ppm")
+                        if pix.alpha:
+                            pix = fitz.Pixmap(pix, 0)  # remove alpha channel
+                        if pix.n >= 4:
+                            pix = fitz.Pixmap(fitz.csRGB, pix)  # convert CMYK to RGB
+                        img_data = pix.tobytes("ppm")
                         
                         # Convert bytes to PIL Image
                         pil_image = Image.open(io.BytesIO(img_data))
@@ -94,11 +91,6 @@ def generate_image_caption(image: Image.Image) -> str:
         return "Error: Gemini API key not configured."
     
     try:
-        # Convert PIL Image to bytes for the API
-        image_bytes = io.BytesIO()
-        image.save(image_bytes, format="PNG")
-        image_bytes.seek(0)
-        
         # Create the prompt for detailed image description
         prompt = (
             "Describe this image, graph, or chart in extreme detail. "
@@ -107,15 +99,10 @@ def generate_image_caption(image: Image.Image) -> str:
         )
         
         # Send the image to the model using the new google-genai SDK
+        # The SDK accepts PIL Image objects natively
         response = GEMINI_CLIENT.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=[
-                prompt,
-                {
-                    "mime_type": "image/png",
-                    "data": image_bytes.getvalue(),
-                },
-            ]
+            model="gemini-2.0-flash",
+            contents=[prompt, image]
         )
         
         return response.text

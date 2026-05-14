@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -180,7 +181,10 @@ class ChatProvider extends ChangeNotifier {
         return;
       }
 
-      final dir = await getTemporaryDirectory();
+      final dir = await getApplicationDocumentsDirectory();
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
       _currentRecordingPath =
           '${dir.path}/vesper_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
@@ -398,14 +402,35 @@ class ChatProvider extends ChangeNotifier {
     _structuredSummary = null;
 
     try {
-      final result =
-          await _apiService.fetchStructuredSummary(_sessionId!);
-      _structuredSummary = result;
+      final result = await _apiService.fetchStructuredSummary(_sessionId!);
+      _structuredSummary = _normalizeStructuredSummary(result);
     } catch (error) {
       _errorMessage = _formatError(error);
     } finally {
       _setLoading(false);
     }
+  }
+
+  Map<String, dynamic> _normalizeStructuredSummary(dynamic result) {
+    dynamic value = result;
+
+    if (value is String) {
+      try {
+        value = jsonDecode(value);
+      } catch (_) {
+        value = <String, dynamic>{};
+      }
+    }
+
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+
+    return <String, dynamic>{};
   }
 
   /// Dismiss the structured summary dashboard without downloading.
