@@ -1,5 +1,6 @@
 import io
 import os
+import time
 
 import fitz
 from PIL import Image
@@ -101,10 +102,12 @@ def generate_image_caption(image: Image.Image) -> str:
         # Send the image to the model using the new google-genai SDK
         # The SDK accepts PIL Image objects natively
         response = GEMINI_CLIENT.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash-latest",
             contents=[prompt, image]
         )
-        
+        # Respect free-tier rate limits: pause before returning text
+        time.sleep(4)  # 4-second delay to prevent hitting the 15 RPM limit
+
         return response.text
         
     except Exception as e:

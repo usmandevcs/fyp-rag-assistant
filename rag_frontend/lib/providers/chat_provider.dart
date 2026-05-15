@@ -276,7 +276,7 @@ class ChatProvider extends ChangeNotifier {
       );
 
       final question = result['question'] as String;
-      final answer = result['answer'] as String;
+      final answer = (result['answer'] as String).replaceAll(r'\n', '\n');
       final sources = result['sources'] as List<String>;
       final sourcesText = sources.isNotEmpty ? sources.join(', ') : '';
 
@@ -291,7 +291,8 @@ class ChatProvider extends ChangeNotifier {
       );
 
       try {
-        await _speakText(answer);
+        String ttsText = answer.replaceAll(RegExp(r'[\|\*\#\-\_]'), ' ').replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+        await _speakText(ttsText);
       } catch (e) {
         debugPrint('TTS after voice response: $e');
       }
