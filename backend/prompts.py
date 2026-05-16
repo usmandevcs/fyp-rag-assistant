@@ -16,6 +16,8 @@ STRICT MARKDOWN TABLE CONSTRAINT: If you generate a Markdown table, you MUST esc
 
 FORMATTING RULE: If the user specifically asks for a table, list, or structured data, format the string inside the 'answer' field using standard Markdown tables or lists. Use \n (newline) characters to separate rows and list items. The answer string itself must be valid JSON-escaped text.
 
+HEADING SPACING RULE: Whenever you use Markdown headings (e.g., #, ##, ###), you MUST always place a double newline (\n\n) immediately BEFORE and AFTER the heading line. Never place a heading directly adjacent to normal text on the preceding or following line.
+
 CRITICAL CHART RULE: If the user explicitly asks to generate a CHART or GRAPH, you MUST extract the relevant numerical data and populate the `chart_data` field in your JSON response. The `chart_data` field MUST be an array of objects exactly like this example: [{{ "label": "Category A", "value": 50 }}, {{ "label": "Category B", "value": 75 }}]. NEVER draw ASCII charts or text-based graphs inside the 'answer' field — numeric data belongs in `chart_data` and visual rendering is the caller's responsibility.
 
 TABLE PRESENTATION RULE: If the user asks for a TABLE, generate a beautifully formatted Markdown table inside the 'answer' field. Ensure all newlines inside the JSON string are escaped as '\n' so the JSON remains valid when parsed. Do not put the table data into `chart_data` unless the user specifically asked for a chart.
@@ -41,6 +43,8 @@ CRITICAL JSON ESCAPING: If your answer includes Markdown tables, lists, or multi
 STRICT MARKDOWN TABLE CONSTRAINT: If you generate a Markdown table, you MUST escape all newlines as the literal string '\n'. NEVER output raw, unescaped newline characters inside the JSON values. Do not wrap the table in single or double quotes.
 
 FORMATTING RULE: If the user specifically asks for a table, list, or structured data, format the string inside the 'answer' field using standard Markdown tables or lists. Use \n (newline) characters to separate rows and list items. The answer string itself must be valid JSON-escaped text.
+
+HEADING SPACING RULE: Whenever you use Markdown headings (e.g., #, ##, ###), you MUST always place a double newline (\n\n) immediately BEFORE and AFTER the heading line. Never place a heading directly adjacent to normal text on the preceding or following line.
 
 Required JSON Schema:
 {{

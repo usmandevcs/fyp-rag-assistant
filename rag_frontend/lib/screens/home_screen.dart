@@ -241,7 +241,7 @@ class _DocumentTab extends StatelessWidget {
                       pause: const Duration(milliseconds: 900),
                       animatedTexts: [
                         FadeAnimatedText('Neural document intelligence online'),
-                        FadeAnimatedText('Upload PDF and begin precision query'),
+                        FadeAnimatedText('Upload documents and begin precision query'),
                         FadeAnimatedText('Context memory aligned and ready'),
                       ],
                     ),
@@ -266,7 +266,7 @@ class _DocumentTab extends StatelessWidget {
                         ? const SpinKitPulse(color: _vesperBlack, size: 16)
                         : const Icon(Icons.upload_file_rounded),
                     label: const Text(
-                      'Upload New PDF',
+                      'Upload New Document',
                       style: TextStyle(
                         fontFamily: 'Roboto',
                         fontWeight: FontWeight.w600,
@@ -409,7 +409,7 @@ class _LinkTabState extends State<_LinkTab> {
         _choiceCard(
           context,
           icon: Icons.add_to_drive_outlined,
-          title: 'Google Drive PDF',
+          title: 'Google Drive Document',
           subtitle: 'Process shared Drive links',
           onTap: () => _select(_LinkType.drive),
         ),

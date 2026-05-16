@@ -52,7 +52,7 @@ class ApiService {
     } on ApiException {
       rethrow;
     } catch (error) {
-      throw ApiException('Failed to upload PDF: $error');
+      throw ApiException('Failed to upload file: $error');
     }
   }
 

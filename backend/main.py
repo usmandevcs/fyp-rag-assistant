@@ -101,57 +101,64 @@ async def api_status():
 
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...), db: SQLSession = Depends(get_db)):
-    """Upload a PDF and get back a session_id for follow-up questions."""
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    """Upload a document (PDF, TXT, DOCX, XLSX) and get back a session_id for follow-up questions."""
+    SUPPORTED_EXTENSIONS = (".pdf", ".txt", ".docx", ".xlsx")
+    file_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+
+    if file_ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type. Supported formats: {', '.join(SUPPORTED_EXTENSIONS)}",
+        )
 
     session_id = str(uuid.uuid4())
-    file_path = os.path.join(UPLOAD_DIR, f"{session_id}.pdf")
+    file_path = os.path.join(UPLOAD_DIR, f"{session_id}{file_ext}")
 
     with open(file_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    chunk_count = rag_engine.ingest_pdf(file_path, session_id)
+    chunk_count = rag_engine.ingest_file(file_path, session_id)
 
-    # Extract images from PDF and add them as documents
-    try:
-        images = extract_images_from_pdf(file_path)
-        if images:
-            image_documents = []
-            for idx, image in enumerate(images):
-                try:
-                    caption = generate_image_caption(image)
-                    # Create a Document object for this image caption
-                    image_doc = Document(
-                        page_content=f"[Extracted Chart/Image Data]: {caption}",
-                        metadata={
-                            "source": file.filename,
-                            "type": "image",
-                            "image_index": idx
-                        }
-                    )
-                    image_documents.append(image_doc)
-                except Exception as img_err:
-                    print(f"Error generating caption for image {idx}: {img_err}")
-                    continue
-            
-            # Add image documents to the same ChromaDB collection
-            if image_documents:
-                try:
-                    vectorstore = Chroma(
-                        persist_directory="chroma_db",
-                        embedding_function=rag_engine._get_embeddings(),
-                        collection_name=session_id
-                    )
-                    vectorstore.add_documents(image_documents)
-                    chunk_count += len(image_documents)
-                except Exception as db_err:
-                    print(f"Warning: Failed to add image documents to ChromaDB: {db_err}")
-    except Exception as e:
-        print(f"Warning: Image extraction skipped: {e}")
+    # Extract images from PDF and add them as documents (PDF-only)
+    if file_ext == ".pdf":
+        try:
+            images = extract_images_from_pdf(file_path)
+            if images:
+                image_documents = []
+                for idx, image in enumerate(images):
+                    try:
+                        caption = generate_image_caption(image)
+                        # Create a Document object for this image caption
+                        image_doc = Document(
+                            page_content=f"[Extracted Chart/Image Data]: {caption}",
+                            metadata={
+                                "source": file.filename,
+                                "type": "image",
+                                "image_index": idx
+                            }
+                        )
+                        image_documents.append(image_doc)
+                    except Exception as img_err:
+                        print(f"Error generating caption for image {idx}: {img_err}")
+                        continue
+                
+                # Add image documents to the same ChromaDB collection
+                if image_documents:
+                    try:
+                        vectorstore = Chroma(
+                            persist_directory="chroma_db",
+                            embedding_function=rag_engine._get_embeddings(),
+                            collection_name=session_id
+                        )
+                        vectorstore.add_documents(image_documents)
+                        chunk_count += len(image_documents)
+                    except Exception as db_err:
+                        print(f"Warning: Failed to add image documents to ChromaDB: {db_err}")
+        except Exception as e:
+            print(f"Warning: Image extraction skipped: {e}")
 
     if chunk_count == 0:
-        raise HTTPException(status_code=400, detail="No readable text or images found in this PDF.")
+        raise HTTPException(status_code=400, detail="No readable text or images found in the uploaded file.")
 
     # Create database session record
     db_session = DBSession(
@@ -177,7 +184,7 @@ async def upload_pdf(file: UploadFile = File(...), db: SQLSession = Depends(get_
         "session_id": session_id,
         "filename": file.filename,
         "chunks_indexed": chunk_count,
-        "message": "PDF uploaded and indexed. You can now ask questions."
+        "message": "File uploaded and indexed. You can now ask questions."
     }
 
 

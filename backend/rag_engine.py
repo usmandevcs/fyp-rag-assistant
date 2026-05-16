@@ -6,7 +6,13 @@ import gdown
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_community.document_loaders import PyPDFLoader, YoutubeLoader
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    YoutubeLoader,
+    TextLoader,
+    Docx2txtLoader,
+    UnstructuredExcelLoader,
+)
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_classic.chains import ConversationalRetrievalChain
@@ -268,6 +274,59 @@ def ingest_pdf(file_path: str, session_id: str) -> int:
                 embedding=_get_embeddings(),
                 persist_directory=CHROMA_DIR,
                 collection_name=session_id  # each session gets its own collection
+            )
+            break
+        except Exception as embed_error:
+            if not _is_quota_error(embed_error):
+                raise
+            _reset_embeddings()
+
+    if vectorstore is None:
+        raise ValueError("Google API quota exceeded for embeddings. Please add a billed key or try again later.")
+
+    # Build chain for this session
+    _chains[session_id] = _build_chain(vectorstore)
+    _chat_histories[session_id] = []
+
+    return len(chunks)
+
+
+def ingest_file(file_path: str, session_id: str) -> int:
+    """Load a file (.pdf, .txt, .docx, .xlsx), split into chunks, store in ChromaDB. Returns chunk count."""
+    ext = os.path.splitext(file_path)[1].lower()
+
+    if ext == ".pdf":
+        return ingest_pdf(file_path, session_id)
+    elif ext == ".txt":
+        loader = TextLoader(file_path, encoding="utf-8")
+    elif ext == ".docx":
+        loader = Docx2txtLoader(file_path)
+    elif ext == ".xlsx":
+        loader = UnstructuredExcelLoader(file_path, mode="elements")
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
+
+    docs = loader.load()
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+    )
+    chunks = splitter.split_documents(docs)
+
+    # Filter out empty or whitespace-only chunks
+    valid_chunks = [chunk for chunk in chunks if chunk.page_content and chunk.page_content.strip()]
+    if not valid_chunks:
+        return 0
+
+    vectorstore = None
+    for _ in range(2):
+        try:
+            vectorstore = Chroma.from_documents(
+                documents=valid_chunks,
+                embedding=_get_embeddings(),
+                persist_directory=CHROMA_DIR,
+                collection_name=session_id,
             )
             break
         except Exception as embed_error:

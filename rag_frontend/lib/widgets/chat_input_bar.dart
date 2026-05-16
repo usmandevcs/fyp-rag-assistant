@@ -140,7 +140,7 @@ class ChatInputBar extends StatelessWidget {
                                   decoration: InputDecoration(
                                     hintText: chatProvider.isProcessingVoice
                                         ? 'Sending voice…'
-                                        : 'Ask a question about your PDF...',
+                                        : 'Ask a question about your document...',
                                     filled: true,
                                     fillColor: const Color(0xFF2D2D34),
                                     border: OutlineInputBorder(

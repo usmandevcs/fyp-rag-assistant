@@ -744,7 +744,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             ),
                                             animatedTexts: [
                                               FadeAnimatedText(
-                                                'Upload a PDF to initialize chat context',
+                                                'Upload a document to initialize chat context',
                                                 textAlign: TextAlign.center,
                                               ),
                                               FadeAnimatedText(

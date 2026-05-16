@@ -447,12 +447,12 @@ class ChatProvider extends ChangeNotifier {
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: <String>['pdf'],
+        allowedExtensions: <String>['pdf', 'txt', 'docx', 'xlsx'],
         withData: true,
       );
 
       if (result == null || result.files.isEmpty) {
-        _errorMessage = 'No PDF file was selected.';
+        _errorMessage = 'No file was selected.';
         notifyListeners();
         return;
       }
@@ -460,7 +460,7 @@ class ChatProvider extends ChangeNotifier {
       final pickedFile = result.files.single;
       final bytes = pickedFile.bytes;
       if (bytes == null || bytes.isEmpty) {
-        throw const ApiException('The selected PDF could not be read.');
+        throw const ApiException('The selected file could not be read.');
       }
 
       final sessionId = await _apiService.uploadPdf(
@@ -501,7 +501,7 @@ class ChatProvider extends ChangeNotifier {
     // Multi-doc mode: need at least 2 selected sessions
     // Single-doc mode: need an active session
     if (!isMultiDocMode && (_sessionId == null || _sessionId!.isEmpty)) {
-      _errorMessage = 'Upload a PDF before asking questions.';
+      _errorMessage = 'Upload a document before asking questions.';
       notifyListeners();
       return;
     }
