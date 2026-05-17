@@ -332,6 +332,14 @@ class _ChatBubbleState extends State<ChatBubble> {
               color: const Color(0xFFFF5F1F).withValues(alpha: 0.5),
               width: 1,
             ),
+            tableColumnWidth: const IntrinsicColumnWidth(),
+            tableCellsDecoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.03),
+              border: Border.all(
+                color: const Color(0xFFFF5F1F).withValues(alpha: 0.18),
+                width: 0.5,
+              ),
+            ),
             tableCellsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             tableHeadAlign: TextAlign.center,
           ),

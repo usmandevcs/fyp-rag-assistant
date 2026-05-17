@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import re
 import tempfile
@@ -85,6 +86,8 @@ class ChromaSafeGoogleEmbeddings(GoogleGenerativeAIEmbeddings):
                 output_dimensionality=output_dimensionality,
             )
             embeddings.append(document_embeddings[0])
+            # Throttle requests to respect Google Free Tier limits (15 RPM)
+            time.sleep(3.5)
         return embeddings
 
 
@@ -199,7 +202,7 @@ def _get_llm() -> ChatGroq:
 
 def _is_quota_error(error: Exception) -> bool:
     message = str(error)
-    return "RESOURCE_EXHAUSTED" in message or "429" in message or "quota" in message.lower()
+    return "RESOURCE_EXHAUSTED" in message or "429" in message or "quota" in message.lower() or "403" in message or "PERMISSION_DENIED" in message
 
 
 def _is_retryable_llm_error(error: Exception) -> bool:
@@ -282,7 +285,7 @@ def ingest_pdf(file_path: str, session_id: str) -> int:
             _reset_embeddings()
 
     if vectorstore is None:
-        raise ValueError("Google API quota exceeded for embeddings. Please add a billed key or try again later.")
+        raise ValueError("Google API quota exceeded or access denied (403/429) for embeddings. Please update your API keys.")
 
     # Build chain for this session
     _chains[session_id] = _build_chain(vectorstore)
@@ -335,7 +338,7 @@ def ingest_file(file_path: str, session_id: str) -> int:
             _reset_embeddings()
 
     if vectorstore is None:
-        raise ValueError("Google API quota exceeded for embeddings. Please add a billed key or try again later.")
+        raise ValueError("Google API quota exceeded or access denied (403/429) for embeddings. Please update your API keys.")
 
     # Build chain for this session
     _chains[session_id] = _build_chain(vectorstore)
@@ -447,7 +450,7 @@ def ingest_url(url: str, session_id: str) -> int:
 
     if vectorstore is None:
         raise ValueError(
-            "Google API quota exceeded for embeddings. Please add a billed key or try again later."
+            "Google API quota exceeded or access denied (403/429) for embeddings. Please update your API keys."
         )
 
     # Build chain for this session
@@ -495,7 +498,7 @@ def ingest_raw_text(text: str, session_id: str) -> int:
 
     if vectorstore is None:
         raise ValueError(
-            "Google API quota exceeded for embeddings. Please add a billed key or try again later."
+            "Google API quota exceeded or access denied (403/429) for embeddings. Please update your API keys."
         )
 
     # Build chain for this session

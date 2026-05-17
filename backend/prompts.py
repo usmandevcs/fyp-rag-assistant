@@ -14,6 +14,8 @@ CRITICAL JSON ESCAPING: If your answer includes Markdown tables, lists, or multi
 
 STRICT MARKDOWN TABLE CONSTRAINT: If you generate a Markdown table, you MUST escape all newlines as the literal string '\n'. NEVER output raw, unescaped newline characters inside the JSON values. Do not wrap the table in single or double quotes.
 
+CRITICAL TABLE SPACING: NEVER place empty lines or double newlines between table rows. Every table row must strictly be on the very next line. Only use double newlines BEFORE the table headers and AFTER the entire table.
+
 FORMATTING RULE: If the user specifically asks for a table, list, or structured data, format the string inside the 'answer' field using standard Markdown tables or lists. Use \n (newline) characters to separate rows and list items. The answer string itself must be valid JSON-escaped text.
 
 HEADING SPACING RULE: Whenever you use Markdown headings (e.g., #, ##, ###), you MUST always place a double newline (\n\n) immediately BEFORE and AFTER the heading line. Never place a heading directly adjacent to normal text on the preceding or following line.
@@ -41,6 +43,8 @@ CRITICAL RULE: You are an API. You must respond ONLY with raw, valid JSON. Do no
 CRITICAL JSON ESCAPING: If your answer includes Markdown tables, lists, or multiple lines, you MUST escape all newline characters as '\n' and double quotes as '\"' inside the JSON string values. The output must be valid JSON.
 
 STRICT MARKDOWN TABLE CONSTRAINT: If you generate a Markdown table, you MUST escape all newlines as the literal string '\n'. NEVER output raw, unescaped newline characters inside the JSON values. Do not wrap the table in single or double quotes.
+
+CRITICAL TABLE SPACING: NEVER place empty lines or double newlines between table rows. Every table row must strictly be on the very next line. Only use double newlines BEFORE the table headers and AFTER the entire table.
 
 FORMATTING RULE: If the user specifically asks for a table, list, or structured data, format the string inside the 'answer' field using standard Markdown tables or lists. Use \n (newline) characters to separate rows and list items. The answer string itself must be valid JSON-escaped text.
 

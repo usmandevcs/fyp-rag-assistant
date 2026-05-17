@@ -34,7 +34,8 @@ def generate_structured_summary(session_id: str) -> dict:
         raise ValueError("No document content found for this session.")
 
     # Build combined context from retrieved chunks
-    context = "\n\n---\n\n".join(doc.page_content for doc in docs)
+    combined_context = "\n\n---\n\n".join(doc.page_content for doc in docs)
+    context = combined_context[:12000]
 
     prompt = SUMMARY_PROMPT_TEMPLATE.format(context=context)
 
@@ -49,27 +50,22 @@ def generate_structured_summary(session_id: str) -> dict:
 
     # Clean up markdown formatting and extract JSON
     cleaned = raw.replace('```json', '').replace('```', '').strip()
+    raw_output = cleaned
 
-    parsed = None
-    for candidate in (
-        cleaned,
-        re.search(r'\{[\s\S]*\}', cleaned).group(0) if re.search(r'\{[\s\S]*\}', cleaned) else None,
-    ):
-        if not candidate:
-            continue
+    try:
         try:
-            parsed = json.loads(candidate)
-            break
+            parsed = json.loads(raw_output)
         except json.JSONDecodeError:
-            continue
-
-    # Fallback: return raw text under "overview"
-    if not isinstance(parsed, dict):
-        parsed = {
-            "overview": cleaned,
-            "key_findings": [],
+            match = re.search(r'\{[\s\S]*\}', raw_output)
+            if match is None:
+                raise
+            parsed = json.loads(match.group(0))
+    except Exception:
+        return {
+            "overview": raw_output[:500] + "...",
+            "key_findings": ["Could not parse specific findings."],
             "critical_data_points": [],
-            "conclusion": "",
+            "conclusion": "Summary generated with partial data.",
         }
 
     summary_payload = {

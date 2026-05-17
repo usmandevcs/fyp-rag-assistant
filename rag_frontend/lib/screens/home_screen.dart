@@ -215,18 +215,6 @@ class _DocumentTab extends StatelessWidget {
                   child: const Icon(Icons.hub_outlined, size: 38, color: _vesperCyan),
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'VESPER CORE',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _vesperCyan,
-                    fontFamily: 'Roboto',
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 10),
                 SizedBox(
                   height: 26,
                   child: DefaultTextStyle(

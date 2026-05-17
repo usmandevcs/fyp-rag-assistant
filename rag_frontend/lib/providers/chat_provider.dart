@@ -275,8 +275,10 @@ class ChatProvider extends ChangeNotifier {
         fileName: fileName,
       );
 
-      final question = result['question'] as String;
-      final answer = (result['answer'] as String).replaceAll(r'\n', '\n');
+        final question = result['question'] as String;
+        final answer = (result['answer'] as String)
+          .replaceAll(r'\n', '\n')
+          .replaceAll(RegExp(r'\|\s*\n\s*\n\s*\|'), '|\n|');
       final sources = result['sources'] as List<String>;
       final sourcesText = sources.isNotEmpty ? sources.join(', ') : '';
 
@@ -529,7 +531,9 @@ class ChatProvider extends ChangeNotifier {
         );
       }
 
-      final answer = result['answer'] as String;
+        final answer = (result['answer'] as String)
+          .replaceAll(r'\n', '\n')
+          .replaceAll(RegExp(r'\|\s*\n\s*\n\s*\|'), '|\n|');
       final sources = result['sources'] as List<String>;
       final sourcesText = sources.isNotEmpty ? sources.join(', ') : '';
       final followUps = result['follow_ups'] as List<String>? ?? <String>[];
